@@ -15,7 +15,76 @@
 
     Cloud-dependent operations are intentionally inactive.
 -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import {
+    getDatabase,
+    ref,
+    get,
+    set,
+    update,
+    remove,
+    push,
+    onValue
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+import {
+    getAuth,
+    signInAnonymously,
+    onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
+const firebaseConfig = {
+    apiKey: "AIzaSyA6yuHjPrn3SVsXeJSnA9gzJ6tHw9oGdnA",
+    authDomain: "mobile-presenter.firebaseapp.com",
+    databaseURL: "https://mobile-presenter-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "mobile-presenter",
+    storageBucket: "mobile-presenter.firebasestorage.app",
+    messagingSenderId: "386403722965",
+    appId: "1:386403722965:web:6326d68a98c5d32e18a45c",
+    measurementId: "G-S4B3Z9E74B"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const auth = getAuth(app);
+
+window.mobilePresenterFirebase = {
+    app,
+    db,
+    auth,
+    ref,
+    get,
+    set,
+    update,
+    remove,
+    push,
+    onValue
+};
+
+window.mobilePresenterAuthReady = new Promise((resolve, reject) => {
+    signInAnonymously(auth).catch(reject);
+
+    const unsubscribe = onAuthStateChanged(auth, user => {
+        if (!user) return;
+
+        unsubscribe();
+
+        window.mobilePresenterUID = user.uid;
+
+        console.info("Mobile Presenter Firebase connected.");
+        console.info("Device UID:", user.uid);
+
+        alert(
+            "Firebase authentication successful!\n\n" +
+            "Your device UID is:\n\n" +
+            user.uid +
+            "\n\nPlease copy this UID. We will use it to authorize your administrator device."
+        );
+
+        resolve(user);
+    });
+});
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
 <style>

@@ -22,7 +22,6 @@ if ('serviceWorker' in navigator) {
 </script>
 
 <script type="module">
-<script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import {
     getDatabase,
@@ -81,7 +80,7 @@ window.mobilePresenterAuthReady = new Promise((resolve, reject) => {
         console.info("Mobile Presenter Firebase connected.");
         console.info("Device UID:", user.uid);
 
-        // The popup alert has been successfully removed.
+        // Popup alert removed successfully.
 
         initializeCloudSync();
 
@@ -2291,6 +2290,7 @@ async function saveSongFromEditor() {
         alert("Failed to save song: " + err.message);
     }
 }
+window.saveSongFromEditor = saveSongFromEditor;
 
 /* DELETE SONG */
 

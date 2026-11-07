@@ -1675,9 +1675,9 @@ function detectSongSections(content) {
     if (!content) return [];
     const sections = [];
 
-    // Detects section tags wrapped in square brackets, like [Intro], [Chorus 2], [Bridge]
+    // Detects Intro, Verse (1, 2, 3), Pre, Pre-Chorus, Chorus (1, 2, 3), Bridge, Instrumental, and Outro
     const markerPattern =
-        /^[ \t]*\[(Intro|Verse(?:[ \t]*\d+)?|Chorus(?:[ \t]*\d+)?|Bridge|Outro)\][ \t]*$/gim;
+        /^[ \t]*\[(Intro|Verse(?:[ \t]*\d+)?|Pre-?Chorus|Pre|Chorus(?:[ \t]*\d+)?|Bridge|Instrumental|Outro)\][ \t]*$/gim;
 
     let match;
 

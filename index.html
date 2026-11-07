@@ -1759,7 +1759,10 @@ function renderSongContent(box, jumper, isPlayMode) {
 
     let originalContent = currentPlayingSong.content || "";
 
-    // 🧹 Strip wrapping hash symbols in Play Mode (e.g., #Chorus# -> Chorus)
+    // 1. Detect sections using the original content containing #hashes#
+    const sections = isPlayMode && jumper ? detectSongSections(originalContent) : [];
+
+    // 2. Now strip the wrapping hash symbols for play mode display (e.g., #Chorus# -> Chorus)
     if (isPlayMode) {
         originalContent = originalContent.replace(
             /^[ \t]*#(Intro|Verse(?:[ \t]*\d+)?|Chorus+s?(?:[ \t]*\d+)?|Bridge|Outro)#([ \t]*)$/gim,
@@ -1771,15 +1774,7 @@ function renderSongContent(box, jumper, isPlayMode) {
         ? transposeSongContent(originalContent, globalSemitones)
         : originalContent;
 
-    if (!isPlayMode || !jumper) {
-        appendColoredText(box, content, 0);
-        box.scrollTop = 0;
-        return;
-    }
-
-    const sections = detectSongSections(content);
-
-    if (!sections.length) {
+    if (!isPlayMode || !jumper || !sections.length) {
         appendColoredText(box, content, 0);
         box.scrollTop = 0;
         return;
@@ -1823,22 +1818,6 @@ function renderSongContent(box, jumper, isPlayMode) {
     });
 
     box.scrollTop = 0;
-}
-
-function renderPlayScreen() {
-    renderSongContent(
-        document.getElementById("play-lyrics-box"),
-        document.getElementById("floating-jumper-bar"),
-        true
-    );
-}
-
-function renderEditScreen() {
-    renderSongContent(
-        document.getElementById("edit-lyrics-box"),
-        null,
-        false
-    );
 }
 
 

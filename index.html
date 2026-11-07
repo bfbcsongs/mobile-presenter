@@ -80,8 +80,6 @@ window.mobilePresenterAuthReady = new Promise((resolve, reject) => {
         console.info("Mobile Presenter Firebase connected.");
         console.info("Device UID:", user.uid);
 
-        // Popup alert removed successfully.
-
         initializeCloudSync();
 
         resolve(user);
@@ -1674,6 +1672,7 @@ function appendColoredText(parent, text, absoluteStart) {
 /* SONG SECTION JUMPER */
 
 function detectSongSections(content) {
+    if (!content) return [];
     const sections = [];
 
     // Detects section tags wrapped in square brackets, like [Intro], [Chorus 2], [Bridge]
@@ -1730,29 +1729,31 @@ function renderSongContent(box, jumper, isPlayMode) {
         jumper.innerHTML = "";
     }
 
+    if (!currentPlayingSong || !currentPlayingSong.content) {
+        box.innerHTML = "<div style='text-align: center; color: #888; padding: 20px;'>No song loaded.</div>";
+        return;
+    }
+
     applySongFontSize(
         currentPlayingSong.fontSize ||
         getSongFontSize(currentPlayingSong.title)
     );
 
-    let originalContent = currentPlayingSong.content || "";
-
-    // 1. Detect sections using the original content containing #hashes#
-    const sections = isPlayMode && jumper ? detectSongSections(originalContent) : [];
-
-    // 2. Now strip the wrapping hash symbols for play mode display (e.g., #Chorus# -> Chorus)
-    if (isPlayMode) {
-        originalContent = originalContent.replace(
-            /^[ \t]*#(Intro|Verse(?:[ \t]*\d+)?|Chorus+s?(?:[ \t]*\d+)?|Bridge|Outro)#([ \t]*)$/gim,
-            "$1$2"
-        );
-    }
+    const originalContent = currentPlayingSong.content;
 
     const content = isPlayMode
         ? transposeSongContent(originalContent, globalSemitones)
         : originalContent;
 
-    if (!isPlayMode || !jumper || !sections.length) {
+    if (!isPlayMode || !jumper) {
+        appendColoredText(box, content, 0);
+        box.scrollTop = 0;
+        return;
+    }
+
+    const sections = detectSongSections(content);
+
+    if (!sections.length) {
         appendColoredText(box, content, 0);
         box.scrollTop = 0;
         return;
@@ -1760,16 +1761,11 @@ function renderSongContent(box, jumper, isPlayMode) {
 
     let previousPosition = 0;
 
+    if (sections[0].start > 0) {
+        appendColoredText(box, content.slice(0, sections[0].start), 0);
+    }
+
     sections.forEach((section, index) => {
-
-        if (section.start > previousPosition) {
-            appendColoredText(
-                box,
-                content.slice(previousPosition, section.start),
-                previousPosition
-            );
-        }
-
         const nextPosition = index + 1 < sections.length
             ? sections[index + 1].start
             : content.length;
@@ -1777,10 +1773,12 @@ function renderSongContent(box, jumper, isPlayMode) {
         const block = document.createElement("span");
         block.className = "jumper-section-block";
 
+        const sliceStart = section.markerEnd;
+
         appendColoredText(
             block,
-            content.slice(section.start, nextPosition),
-            section.start
+            content.slice(sliceStart, nextPosition),
+            sliceStart
         );
 
         box.appendChild(block);
@@ -1791,11 +1789,25 @@ function renderSongContent(box, jumper, isPlayMode) {
         button.onclick = () => jumpToSongSection(index);
 
         jumper.appendChild(button);
-
-        previousPosition = nextPosition;
     });
 
     box.scrollTop = 0;
+}
+
+function renderPlayScreen() {
+    renderSongContent(
+        document.getElementById("play-lyrics-box"),
+        document.getElementById("floating-jumper-bar"),
+        true
+    );
+}
+
+function renderEditScreen() {
+    renderSongContent(
+        document.getElementById("edit-lyrics-box"),
+        null,
+        false
+    );
 }
 
 
@@ -1935,7 +1947,6 @@ function openShowSetListDrawer(sl) {
     importBtn.onclick = () => {
         try {
             let localCache = JSON.parse(localStorage.getItem("localWifiSetLists") || "[]");
-            // Avoid exact duplicates
             const exists = localCache.some(item => item.worshipLeader === sl.worshipLeader && item.createdAt === sl.createdAt);
             if (!exists) {
                 localCache.push(sl);
@@ -2255,7 +2266,7 @@ async function saveSongFromEditor() {
     const passkey = prompt("Enter Admin Passkey to Save:");
     if (passkey === null) return; // User tapped Cancel
 
-    if (passkey !== "1234") { // 🔑 Change "1234" to your desired passkey
+    if (passkey !== "1234") {
         alert("Incorrect passkey. Save denied.");
         return;
     }
@@ -2263,7 +2274,6 @@ async function saveSongFromEditor() {
     const db = window.mobilePresenterFirebase.db;
     const ref = window.mobilePresenterFirebase.ref;
     const set = window.mobilePresenterFirebase.set;
-
 
     try {
         await set(ref(db, 'lineUpMaker/songsDatabase/' + title), content);

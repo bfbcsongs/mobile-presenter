@@ -1676,8 +1676,31 @@ function appendColoredText(parent, text, absoluteStart) {
 function detectSongSections(content) {
     const sections = [];
 
+    // Matches tags wrapped in hashes, like #Chorus# or #Verse 1#
     const markerPattern =
-        /^[ \t]*#(Intro|Verse(?:[ \t]*\d+)?|Chorus|Bridge|Outro)[ \t]*$/gim;
+        /^[ \t]*#(Intro|Verse(?:[ \t]*\d+)?|Chorus+s?(?:[ \t]*\d+)?|Bridge|Outro)#\b[ \t]*$/gim;
+
+    let match;
+
+    while ((match = markerPattern.exec(content)) !== null) {
+        sections.push({
+            start: match.index,
+            markerEnd: match.index + match[0].length,
+            label: match[1].trim().toUpperCase()
+        });
+    }
+
+    return sections;
+}
+
+/* SONG SECTION JUMPER */
+
+function detectSongSections(content) {
+    const sections = [];
+
+    // Detects tags wrapped in hashes, like #Chorus# or #Verse 1#
+    const markerPattern =
+        /^[ \t]*#(Intro|Verse(?:[ \t]*\d+)?|Chorus+s?(?:[ \t]*\d+)?|Bridge|Outro)#\b[ \t]*$/gim;
 
     let match;
 
@@ -1734,7 +1757,15 @@ function renderSongContent(box, jumper, isPlayMode) {
         getSongFontSize(currentPlayingSong.title)
     );
 
-    const originalContent = currentPlayingSong.content || "";
+    let originalContent = currentPlayingSong.content || "";
+
+    // 🧹 Strip wrapping hash symbols in Play Mode (e.g., #Chorus# -> Chorus)
+    if (isPlayMode) {
+        originalContent = originalContent.replace(
+            /^[ \t]*#(Intro|Verse(?:[ \t]*\d+)?|Chorus+s?(?:[ \t]*\d+)?|Bridge|Outro)#([ \t]*)$/gim,
+            "$1$2"
+        );
+    }
 
     const content = isPlayMode
         ? transposeSongContent(originalContent, globalSemitones)
@@ -1809,6 +1840,7 @@ function renderEditScreen() {
         false
     );
 }
+
 
 /* SET LIST */
 

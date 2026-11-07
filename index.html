@@ -1676,31 +1676,9 @@ function appendColoredText(parent, text, absoluteStart) {
 function detectSongSections(content) {
     const sections = [];
 
-    // Matches tags wrapped in hashes, like #Chorus# or #Verse 1#
+    // Detects section tags wrapped in square brackets, like [Intro], [Chorus 2], [Bridge]
     const markerPattern =
-        /^[ \t]*#(Intro|Verse(?:[ \t]*\d+)?|Chorus+s?(?:[ \t]*\d+)?|Bridge|Outro)#\b[ \t]*$/gim;
-
-    let match;
-
-    while ((match = markerPattern.exec(content)) !== null) {
-        sections.push({
-            start: match.index,
-            markerEnd: match.index + match[0].length,
-            label: match[1].trim().toUpperCase()
-        });
-    }
-
-    return sections;
-}
-
-/* SONG SECTION JUMPER */
-
-function detectSongSections(content) {
-    const sections = [];
-
-    // Detects tags wrapped in hashes, like #Chorus# or #Verse 1#
-    const markerPattern =
-        /^[ \t]*#(Intro|Verse(?:[ \t]*\d+)?|Chorus+s?(?:[ \t]*\d+)?|Bridge|Outro)#\b[ \t]*$/gim;
+        /^[ \t]*\[(Intro|Verse(?:[ \t]*\d+)?|Chorus(?:[ \t]*\d+)?|Bridge|Outro)\][ \t]*$/gim;
 
     let match;
 

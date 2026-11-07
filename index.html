@@ -1692,7 +1692,7 @@ function detectSongSections(content) {
     return sections;
 }
 
-function jumpToSongSection(index) {
+function jumpToSongSection(index, shouldBroadcast = true) {
     const box = document.getElementById("play-lyrics-box");
     const jumper = document.getElementById("floating-jumper-bar");
 
@@ -1716,7 +1716,13 @@ function jumpToSongSection(index) {
         behavior: "smooth",
         block: "center"
     });
+
+    // Broadcast live section jump to other phones (Offline + Online)
+    if (shouldBroadcast && typeof currentPlayingSong !== "undefined" && currentPlayingSong.title) {
+        broadcastLiveSession(currentPlayingSong.title, index);
+    }
 }
+
 
 /* SONG DISPLAY */
 

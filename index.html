@@ -22,6 +22,7 @@ if ('serviceWorker' in navigator) {
 </script>
 
 <script type="module">
+<script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import {
     getDatabase,
@@ -80,12 +81,7 @@ window.mobilePresenterAuthReady = new Promise((resolve, reject) => {
         console.info("Mobile Presenter Firebase connected.");
         console.info("Device UID:", user.uid);
 
-        alert(
-            "Firebase authentication successful!\n\n" +
-            "Your device UID is:\n\n" +
-            user.uid +
-            "\n\nPlease copy this UID. We will use it to authorize your administrator device."
-        );
+        // The popup alert has been successfully removed.
 
         initializeCloudSync();
 
@@ -93,6 +89,7 @@ window.mobilePresenterAuthReady = new Promise((resolve, reject) => {
     });
 });
 </script>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
 <style>

@@ -5,16 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Line-up Maker</title>
 
-<!--
-    LINE-UP MAKER
-    INITIAL GITHUB EDITION
-
-    Firebase connection: NOT CONFIGURED
-    Previous Firebase project: NOT CONNECTED
-    New Firebase project: TO BE CONFIGURED LATER
-
-    Cloud-dependent operations are intentionally inactive.
--->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import {
@@ -80,6 +70,9 @@ window.mobilePresenterAuthReady = new Promise((resolve, reject) => {
             user.uid +
             "\n\nPlease copy this UID. We will use it to authorize your administrator device."
         );
+
+        // Load data from Firebase once authenticated
+        initializeCloudSync();
 
         resolve(user);
     });
@@ -903,26 +896,6 @@ header {
 </div>
 
 <script>
-/* =========================================================
-   FIREBASE CONNECTION PLACEHOLDER
-   =========================================================
-
-   This initial GitHub edition is intentionally disconnected.
-
-   The previous "preach-mate" Firebase project is not referenced.
-   No Firebase SDK is imported.
-   No database listeners or writes are active.
-
-   When the new Firebase project is ready, its configuration
-   and connection functions will be added here.
-*/
-
-const FIREBASE_SETUP_PENDING = true;
-
-function firebaseSetupPending() {
-    alert("Firebase setup is pending. This feature will be available after the new Firebase project is connected.");
-}
-
 /* APP DATA */
 
 let categories = ["Opening", "Joyful", "Solemn", "Offering", "Closing"];
@@ -970,10 +943,48 @@ let lineColorsDirty = false;
 const notesSharp = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const notesFlat = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
 
-/* FIREBASE INITIALIZATION IS DELIBERATELY DISABLED */
+/* LIVE FIREBASE SYNC */
 
-function initializeFirebase() {
-    console.info("Line-up Maker: waiting for new Firebase configuration.");
+function initializeCloudSync() {
+    const db = window.mobilePresenterFirebase.db;
+    const ref = window.mobilePresenterFirebase.ref;
+    const onValue = window.mobilePresenterFirebase.onValue;
+
+    // Sync Songs Database
+    onValue(ref(db, 'lineUpMaker/songsDatabase'), (snapshot) => {
+        songsDatabase = snapshot.val() || {};
+        renderSongsDatabase();
+        renderNewLineUpForm();
+    });
+
+    // Sync Set Lists
+    onValue(ref(db, 'lineUpMaker/setLists'), (snapshot) => {
+        const val = snapshot.val();
+        if (val) {
+            setLists = Array.isArray(val) ? val : Object.values(val);
+        } else {
+            setLists = [];
+        }
+        renderSetList();
+    });
+
+    // Sync Categories
+    onValue(ref(db, 'lineUpMaker/categories'), (snapshot) => {
+        const val = snapshot.val();
+        if (val) {
+            categories = Array.isArray(val) ? val : Object.values(val);
+        }
+        renderNewLineUpForm();
+    });
+
+    // Sync Zoom Levels & Line Colors
+    onValue(ref(db, 'lineUpMaker/songZoomLevels'), (snapshot) => {
+        songZoomLevels = snapshot.val() || {};
+    });
+
+    onValue(ref(db, 'lineUpMaker/songLineColors'), (snapshot) => {
+        songLineColors = snapshot.val() || {};
+    });
 }
 
 /* HELPERS */
@@ -1044,6 +1055,14 @@ function changeEditorZoom(amount) {
 
     if (currentPlayingSong.title) {
         currentPlayingSong.fontSize = currentSongFontSize;
+        const key = getSongKey(currentPlayingSong.title);
+        songZoomLevels[key] = currentSongFontSize;
+        
+        // Save zoom level to Firebase
+        const db = window.mobilePresenterFirebase.db;
+        const ref = window.mobilePresenterFirebase.ref;
+        const set = window.mobilePresenterFirebase.set;
+        set(ref(db, 'lineUpMaker/songZoomLevels/' + key), currentSongFontSize);
     }
 }
 
@@ -1849,8 +1868,15 @@ function renderSetList() {
         del.className = "btn btn-sm btn-danger";
         del.textContent = "Delete";
 
-        del.onclick = () => {
-            firebaseSetupPending();
+        del.onclick = async () => {
+            if (confirm("Delete this set list?")) {
+                const db = window.mobilePresenterFirebase.db;
+                const ref = window.mobilePresenterFirebase.ref;
+                const set = window.mobilePresenterFirebase.set;
+                
+                setLists.splice(sl.originalIndex, 1);
+                await set(ref(db, 'lineUpMaker/setLists'), setLists);
+            }
         };
 
         buttons.append(load, del);
@@ -2123,13 +2149,72 @@ function openPlayToEdit() {
 /* SAVE NEW OR EDITED SONG */
 
 async function saveSongFromEditor() {
-    firebaseSetupPending();
+    const editor = document.getElementById("editor-textarea");
+    const content = editor.value.trim();
+    const title = isNewSongDraft ? newSongTitle : activeEditingKey;
+
+    if (!title) {
+        alert("Missing song title.");
+        return;
+    }
+
+    if (!content) {
+        alert("Please enter song lyrics and chords.");
+        return;
+    }
+
+    const db = window.mobilePresenterFirebase.db;
+    const ref = window.mobilePresenterFirebase.ref;
+    const set = window.mobilePresenterFirebase.set;
+
+    try {
+        await set(ref(db, 'lineUpMaker/songsDatabase/' + title), content);
+
+        if (lineColorsDirty) {
+            const key = getSongKey(title);
+            songLineColors[key] = currentLineColors;
+            await set(ref(db, 'lineUpMaker/songLineColors/' + key), currentLineColors);
+        }
+
+        songsDatabase[title] = content;
+        alert("Song saved successfully!");
+
+        currentPlayingSong = {
+            title: title,
+            content: content,
+            fontSize: getSongFontSize(title)
+        };
+
+        playSong(title);
+    } catch (err) {
+        console.error(err);
+        alert("Failed to save song: " + err.message);
+    }
 }
 
 /* DELETE SONG */
 
 async function deleteCurrentSong() {
-    firebaseSetupPending();
+    const title = currentPlayingSong.title;
+    if (!title) return;
+
+    if (!confirm(`Are you sure you want to delete "${title}"?`)) return;
+
+    const db = window.mobilePresenterFirebase.db;
+    const ref = window.mobilePresenterFirebase.ref;
+    const remove = window.mobilePresenterFirebase.remove;
+
+    try {
+        await remove(ref(db, 'lineUpMaker/songsDatabase/' + title));
+        delete songsDatabase[title];
+        alert("Song deleted.");
+        switchView("home");
+        renderSongsDatabase();
+        renderNewLineUpForm();
+    } catch (err) {
+        console.error(err);
+        alert("Failed to delete song: " + err.message);
+    }
 }
 
 /* LINE-UP FORM */
@@ -2178,7 +2263,48 @@ function renderNewLineUpForm() {
 }
 
 async function saveNewLineUpFromForm() {
-    firebaseSetupPending();
+    const wlInput = document.getElementById("new-wl-name");
+    const worshipLeader = wlInput.value.trim();
+
+    if (!worshipLeader) {
+        alert("Please enter the Worship Leader's name.");
+        wlInput.focus();
+        return;
+    }
+
+    const lineup = {};
+    categories.forEach((cat, index) => {
+        const select = document.getElementById("select-new-" + index);
+        if (select && select.value) {
+            lineup[cat] = select.value;
+        }
+    });
+
+    if (!Object.keys(lineup).length) {
+        alert("Please assign at least one song to the line-up.");
+        return;
+    }
+
+    const newList = {
+        worshipLeader: worshipLeader,
+        lineup: lineup,
+        createdAt: Date.now()
+    };
+
+    const db = window.mobilePresenterFirebase.db;
+    const ref = window.mobilePresenterFirebase.ref;
+    const push = window.mobilePresenterFirebase.push;
+
+    try {
+        await push(ref(db, 'lineUpMaker/setLists'), newList);
+        alert("Line-up saved successfully!");
+        wlInput.value = "";
+        closeDrawer("drawer-newlineup");
+        openDrawer("drawer-setlist");
+    } catch (err) {
+        console.error(err);
+        alert("Failed to save line-up: " + err.message);
+    }
 }
 
 function openSaveLineupModal() {
@@ -2186,7 +2312,33 @@ function openSaveLineupModal() {
 }
 
 async function confirmSaveActiveLineUp() {
-    firebaseSetupPending();
+    const wlInput = document.getElementById("save-wl-input");
+    const worshipLeader = wlInput.value.trim();
+
+    if (!worshipLeader) {
+        alert("Please enter Worship Leader name.");
+        return;
+    }
+
+    const newList = {
+        worshipLeader: worshipLeader,
+        lineup: activeLineUp,
+        createdAt: Date.now()
+    };
+
+    const db = window.mobilePresenterFirebase.db;
+    const ref = window.mobilePresenterFirebase.ref;
+    const push = window.mobilePresenterFirebase.push;
+
+    try {
+        await push(ref(db, 'lineUpMaker/setLists'), newList);
+        alert("Active line-up saved!");
+        closeModal("save-lineup-modal");
+        wlInput.value = "";
+    } catch (err) {
+        console.error(err);
+        alert("Failed to save: " + err.message);
+    }
 }
 
 /* PLAY SONG */
@@ -2242,7 +2394,34 @@ function openAddCategoryModal() {
 }
 
 async function confirmAddCategory() {
-    firebaseSetupPending();
+    const input = document.getElementById("new-cat-input");
+    const catName = input.value.trim();
+
+    if (!catName) {
+        alert("Enter category name.");
+        return;
+    }
+
+    if (categories.includes(catName)) {
+        alert("Category already exists.");
+        return;
+    }
+
+    categories.push(catName);
+    input.value = "";
+    closeModal("add-cat-modal");
+
+    const db = window.mobilePresenterFirebase.db;
+    const ref = window.mobilePresenterFirebase.ref;
+    const set = window.mobilePresenterFirebase.set;
+
+    try {
+        await set(ref(db, 'lineUpMaker/categories'), categories);
+        renderNewLineUpForm();
+    } catch (err) {
+        console.error(err);
+        alert("Failed to add category: " + err.message);
+    }
 }
 
 /* INITIALIZE */
@@ -2266,8 +2445,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
-    console.info("Line-up Maker initial GitHub edition loaded.");
-    console.info("New Firebase project has not yet been connected.");
+    console.info("Line-up Maker cloud edition loaded.");
 });
 </script>
 

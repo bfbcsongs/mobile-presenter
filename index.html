@@ -965,6 +965,41 @@ let lineColorsDirty = false;
 const notesSharp = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const notesFlat = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
 
+/* UNIFIED LIVE BROADCAST (OFFLINE LOCAL WI-FI + ONLINE FIREBASE) */
+
+const localLiveChannel = typeof BroadcastChannel !== "undefined" 
+    ? new BroadcastChannel("lineup_maker_live_sync") 
+    : null;
+
+function broadcastLiveSession(songTitle, sectionIndex = 0) {
+    const payload = {
+        title: songTitle,
+        sectionIndex: sectionIndex,
+        timestamp: Date.now()
+    };
+
+    // 1. Local Wi-Fi / Offline Broadcast
+    try {
+        localStorage.setItem("lineUpMaker_liveSession", JSON.stringify(payload));
+        if (localLiveChannel) {
+            localLiveChannel.postMessage(payload);
+        }
+    } catch (err) {
+        console.error("Local sync error:", err);
+    }
+
+    // 2. Firebase Cloud Broadcast (Online)
+    if (window.mobilePresenterFirebase && navigator.onLine) {
+        const db = window.mobilePresenterFirebase.db;
+        const ref = window.mobilePresenterFirebase.ref;
+        const set = window.mobilePresenterFirebase.set;
+
+        set(ref(db, 'lineUpMaker/liveSession'), payload).catch(err => {
+            console.warn("Firebase offline, local sync active:", err);
+        });
+    }
+}
+
 /* LIVE FIREBASE SYNC */
 
 function initializeCloudSync() {
@@ -1006,6 +1041,14 @@ function initializeCloudSync() {
 
     onValue(ref(db, 'lineUpMaker/songLineColors'), (snapshot) => {
         songLineColors = snapshot.val() || {};
+    });
+
+    // Sync Online Live Session
+    onValue(ref(db, 'lineUpMaker/liveSession'), (snapshot) => {
+        const liveData = snapshot.val();
+        if (liveData) {
+            handleIncomingLiveSync(liveData);
+        }
     });
 }
 
@@ -1717,12 +1760,11 @@ function jumpToSongSection(index, shouldBroadcast = true) {
         block: "center"
     });
 
-    // Broadcast live section jump to other phones (Offline + Online)
+    // Broadcast section change to connected devices (Offline + Online)
     if (shouldBroadcast && typeof currentPlayingSong !== "undefined" && currentPlayingSong.title) {
         broadcastLiveSession(currentPlayingSong.title, index);
     }
 }
-
 
 /* SONG DISPLAY */
 
@@ -1765,8 +1807,6 @@ function renderSongContent(box, jumper, isPlayMode) {
         return;
     }
 
-    let previousPosition = 0;
-
     if (sections[0].start > 0) {
         appendColoredText(box, content.slice(0, sections[0].start), 0);
     }
@@ -1792,7 +1832,7 @@ function renderSongContent(box, jumper, isPlayMode) {
         const button = document.createElement("button");
         button.className = "jumper-chip";
         button.textContent = section.label;
-        button.onclick = () => jumpToSongSection(index);
+        button.onclick = () => jumpToSongSection(index, true);
 
         jumper.appendChild(button);
     });
@@ -1815,7 +1855,6 @@ function renderEditScreen() {
         false
     );
 }
-
 
 /* SET LIST */
 
@@ -1948,7 +1987,6 @@ function openShowSetListDrawer(sl) {
         contentBox.innerHTML = '<span class="empty-message">No songs in this line-up.</span>';
     }
 
-    // Configure Import Button
     const importBtn = document.getElementById("show-import-btn");
     importBtn.onclick = () => {
         try {
@@ -1967,7 +2005,6 @@ function openShowSetListDrawer(sl) {
         }
     };
 
-    // Configure Delete Local Button (Keeps Firebase Safe)
     const deleteLocalBtn = document.getElementById("show-delete-local-btn");
     deleteLocalBtn.onclick = () => {
         try {
@@ -2099,23 +2136,9 @@ function playLineUpSongAt(index) {
         return;
     }
 
-    currentPlayingSong = {
-        title: title,
-        content: songsDatabase[title],
-        fontSize: getSongFontSize(title)
-    };
-
-    currentLineColors = {
-        ...(songLineColors[getSongKey(title)] || {})
-    };
-
-    lineColorsDirty = false;
-
+    playSong(title, true);
     document.getElementById("play-song-title").textContent =
         category + " — " + title;
-
-    renderPlayScreen();
-    switchView("play");
 }
 
 /* SONG DATABASE */
@@ -2152,7 +2175,7 @@ function renderSongsDatabase() {
 
         name.textContent = "🎵 " + title;
         name.onclick = () => {
-            playSong(title);
+            playSong(title, true);
             closeDrawer("drawer-songs");
         };
 
@@ -2270,7 +2293,7 @@ async function saveSongFromEditor() {
 
     // 🔒 ADMIN PASSKEY CHECK
     const passkey = prompt("Enter Admin Passkey to Save:");
-    if (passkey === null) return; // User tapped Cancel
+    if (passkey === null) return;
 
     if (passkey !== "1234") {
         alert("Incorrect passkey. Save denied.");
@@ -2293,13 +2316,7 @@ async function saveSongFromEditor() {
         songsDatabase[title] = content;
         alert("Song saved successfully!");
 
-        currentPlayingSong = {
-            title: title,
-            content: content,
-            fontSize: getSongFontSize(title)
-        };
-
-        playSong(title);
+        playSong(title, true);
     } catch (err) {
         console.error(err);
         alert("Failed to save song: " + err.message);
@@ -2458,7 +2475,7 @@ async function confirmSaveActiveLineUp() {
 
 /* PLAY SONG */
 
-function playSong(title) {
+function playSong(title, shouldBroadcast = true) {
     if (!(title in songsDatabase)) {
         return alert("Song not found.");
     }
@@ -2479,6 +2496,26 @@ function playSong(title) {
 
     renderPlayScreen();
     switchView("play");
+
+    if (shouldBroadcast) {
+        broadcastLiveSession(title, 0);
+    }
+}
+
+/* RECEIVE LIVE COMMANDS (INCOMING SYNC LISTENERS) */
+
+function handleIncomingLiveSync(liveData) {
+    if (!liveData || !liveData.title) return;
+
+    if (liveData.title !== currentPlayingSong.title) {
+        if (songsDatabase[liveData.title]) {
+            playSong(liveData.title, false);
+        }
+    }
+
+    if (typeof liveData.sectionIndex === 'number' && document.getElementById("view-play").classList.contains("active")) {
+        jumpToSongSection(liveData.sectionIndex, false);
+    }
 }
 
 /* QR */
@@ -2552,6 +2589,23 @@ document.addEventListener("DOMContentLoaded", () => {
     initializeColorEditor();
 
     installBrowserBackGuard();
+
+    // Listen via BroadcastChannel (Offline Local Network)
+    if (localLiveChannel) {
+        localLiveChannel.onmessage = (event) => {
+            handleIncomingLiveSync(event.data);
+        };
+    }
+
+    // Listen via Storage Events (Offline Fallback for same origin)
+    window.addEventListener("storage", (event) => {
+        if (event.key === "lineUpMaker_liveSession" && event.newValue) {
+            try {
+                const data = JSON.parse(event.newValue);
+                handleIncomingLiveSync(data);
+            } catch (e) {}
+        }
+    });
 
     document.getElementById("new-song-title-input")
         .addEventListener("keydown", event => {

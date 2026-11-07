@@ -71,7 +71,6 @@ window.mobilePresenterAuthReady = new Promise((resolve, reject) => {
             "\n\nPlease copy this UID. We will use it to authorize your administrator device."
         );
 
-        // Load data from Firebase once authenticated
         initializeCloudSync();
 
         resolve(user);
@@ -804,6 +803,19 @@ header {
     </div>
 </div>
 
+<!-- SHOW INDIVIDUAL SET LIST DRAWER -->
+<div id="drawer-show-setlist" class="drawer-overlay" onclick="closeDrawer('drawer-show-setlist')">
+    <div class="drawer-panel" onclick="event.stopPropagation()">
+        <h3 id="show-setlist-title" style="color:var(--section);font-size:0.95rem;">Set List Details</h3>
+        <div id="show-setlist-content" style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;color:var(--text-muted);font-size:0.8rem;"></div>
+        <div style="display:flex;gap:8px;margin-top:5px;">
+            <button class="btn btn-primary" style="flex:1;" id="show-import-btn">📥 Import to Local</button>
+            <button class="btn btn-danger" style="flex:1;" id="show-delete-local-btn">🗑️ Delete Local</button>
+        </div>
+        <button class="btn" onclick="closeDrawer('drawer-show-setlist')" style="margin-top:4px;">Close</button>
+    </div>
+</div>
+
 <!-- SONG DATABASE -->
 <div id="drawer-songs" class="drawer-overlay" onclick="closeDrawer('drawer-songs')">
     <div class="drawer-panel" onclick="event.stopPropagation()">
@@ -1058,7 +1070,6 @@ function changeEditorZoom(amount) {
         const key = getSongKey(currentPlayingSong.title);
         songZoomLevels[key] = currentSongFontSize;
         
-        // Save zoom level to Firebase
         const db = window.mobilePresenterFirebase.db;
         const ref = window.mobilePresenterFirebase.ref;
         const set = window.mobilePresenterFirebase.set;
@@ -1864,12 +1875,23 @@ function renderSetList() {
             document.getElementById("confirm-lineup-modal").style.display = "flex";
         };
 
+        const showBtn = document.createElement("button");
+        showBtn.className = "btn btn-sm";
+        showBtn.style.background = "#38bdf8";
+        showBtn.style.color = "#0f172a";
+        showBtn.style.fontWeight = "bold";
+        showBtn.textContent = "Show";
+
+        showBtn.onclick = () => {
+            openShowSetListDrawer(sl);
+        };
+
         const del = document.createElement("button");
         del.className = "btn btn-sm btn-danger";
         del.textContent = "Delete";
 
         del.onclick = async () => {
-            if (confirm("Delete this set list?")) {
+            if (confirm("Delete this set list from Firebase?")) {
                 const db = window.mobilePresenterFirebase.db;
                 const ref = window.mobilePresenterFirebase.ref;
                 const set = window.mobilePresenterFirebase.set;
@@ -1879,10 +1901,75 @@ function renderSetList() {
             }
         };
 
-        buttons.append(load, del);
+        buttons.append(load, showBtn, del);
         row.append(heading, buttons);
         container.appendChild(row);
     });
+}
+
+/* SHOW SET LIST DRAWER & LOCAL STORAGE IMPORT/DELETE */
+
+function openShowSetListDrawer(sl) {
+    closeDrawer("drawer-setlist");
+
+    document.getElementById("show-setlist-title").textContent = 
+        "Set List: " + (sl.worshipLeader || "Unnamed");
+
+    const contentBox = document.getElementById("show-setlist-content");
+    contentBox.innerHTML = "";
+
+    if (sl.lineup) {
+        for (const [cat, songTitle] of Object.entries(sl.lineup)) {
+            const item = document.createElement("div");
+            item.style.cssText = "padding:4px 0;border-bottom:1px solid #1e293b;";
+            item.innerHTML = `<strong style="color:var(--section);">${cat}:</strong> ${escapeHTML(songTitle)}`;
+            contentBox.appendChild(item);
+        }
+    } else {
+        contentBox.innerHTML = '<span class="empty-message">No songs in this line-up.</span>';
+    }
+
+    // Configure Import Button
+    const importBtn = document.getElementById("show-import-btn");
+    importBtn.onclick = () => {
+        try {
+            let localCache = JSON.parse(localStorage.getItem("localWifiSetLists") || "[]");
+            // Avoid exact duplicates
+            const exists = localCache.some(item => item.worshipLeader === sl.worshipLeader && item.createdAt === sl.createdAt);
+            if (!exists) {
+                localCache.push(sl);
+                localStorage.setItem("localWifiSetLists", JSON.stringify(localCache));
+                alert("Successfully downloaded/imported line-up to local storage for local Wi-Fi use!");
+            } else {
+                alert("This line-up is already imported in local storage.");
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Failed to import to local storage.");
+        }
+    };
+
+    // Configure Delete Local Button (Keeps Firebase Safe)
+    const deleteLocalBtn = document.getElementById("show-delete-local-btn");
+    deleteLocalBtn.onclick = () => {
+        try {
+            let localCache = JSON.parse(localStorage.getItem("localWifiSetLists") || "[]");
+            const initialLength = localCache.length;
+            localCache = localCache.filter(item => !(item.worshipLeader === sl.worshipLeader && item.createdAt === sl.createdAt));
+            
+            if (localCache.length < initialLength) {
+                localStorage.setItem("localWifiSetLists", JSON.stringify(localCache));
+                alert("Removed from local storage only. Firebase files remain safe!");
+            } else {
+                alert("This line-up was not found in local storage.");
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Failed to delete from local storage.");
+        }
+    };
+
+    openDrawer("drawer-show-setlist");
 }
 
 /* LOAD SET LIST AND SHOW CATEGORIES FIRST */

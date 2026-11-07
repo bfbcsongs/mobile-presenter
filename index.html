@@ -2262,9 +2262,19 @@ async function saveSongFromEditor() {
         return;
     }
 
+    // 🔒 ADMIN PASSKEY CHECK
+    const passkey = prompt("Enter Admin Passkey to Save:");
+    if (passkey === null) return; // User tapped Cancel
+
+    if (passkey !== "1234") { // 🔑 Change "1234" to your desired passkey
+        alert("Incorrect passkey. Save denied.");
+        return;
+    }
+
     const db = window.mobilePresenterFirebase.db;
     const ref = window.mobilePresenterFirebase.ref;
     const set = window.mobilePresenterFirebase.set;
+
 
     try {
         await set(ref(db, 'lineUpMaker/songsDatabase/' + title), content);

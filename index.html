@@ -971,23 +971,23 @@ let lineColorsDirty = false;
 const notesSharp = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const notesFlat = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
 
-/* MANUAL PUSH SYNC CONTROLLER */
-
-let currentSectionIndex = 0;
-
-const localLiveChannel = typeof BroadcastChannel !== "undefined" 
-    ? new BroadcastChannel("lineup_maker_live_sync") 
-    : null;
-
 function manualPushSync() {
     if (!currentPlayingSong || !currentPlayingSong.title) {
         alert("No song currently active to push.");
         return;
     }
 
+    // Kuhanin ang scroll position sa lyrics box (0.0 to 1.0 percentage)
+    const box = document.getElementById("play-lyrics-box");
+    let scrollPercent = 0;
+    if (box && box.scrollHeight > box.clientHeight) {
+        scrollPercent = box.scrollTop / (box.scrollHeight - box.clientHeight);
+    }
+
     const payload = {
         title: currentPlayingSong.title,
         sectionIndex: currentSectionIndex,
+        scrollPercent: scrollPercent, // Pinasok ang scroll position
         timestamp: Date.now()
     };
 
@@ -2529,10 +2529,26 @@ function handleIncomingLiveSync(liveData) {
         }
     }
 
-    if (typeof liveData.sectionIndex === 'number' && document.getElementById("view-play").classList.contains("active")) {
-        jumpToSongSection(liveData.sectionIndex);
+    if (document.getElementById("view-play").classList.contains("active")) {
+        // 1. Sync Jumper Section Tag
+        if (typeof liveData.sectionIndex === 'number') {
+            jumpToSongSection(liveData.sectionIndex);
+        }
+
+        // 2. Sync Smooth Scroll Position
+        if (typeof liveData.scrollPercent === 'number') {
+            const box = document.getElementById("play-lyrics-box");
+            if (box) {
+                const targetScroll = liveData.scrollPercent * (box.scrollHeight - box.clientHeight);
+                box.scrollTo({
+                    top: targetScroll,
+                    behavior: 'smooth'
+                });
+            }
+        }
     }
 }
+
 
 /* QR */
 

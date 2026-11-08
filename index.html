@@ -774,22 +774,21 @@ header {
         </div>
     </div>
 
-    <!-- PLAY -->
+        <!-- PLAY -->
     <div id="view-play" class="view-section">
         <div class="full-screen-container">
             <div class="edit-topbar">
                 <button class="btn btn-sm" onclick="goBackFromPlay()">⬅ Back</button>
                 <span id="play-song-title" style="font-weight:bold;color:var(--section);">Song Title</span>
+                
+                <!-- MANUAL SYNC PUSH BUTTON -->
+                <button class="btn btn-sm btn-success" onclick="manualPushSync()" title="Push current view to all viewer screens">
+                    📡 Push to Viewers
+                </button>
+
                 <button id="play-edit-btn" class="btn btn-sm btn-primary" onclick="openPlayToEdit()">Edit</button>
             </div>
-            <div class="play-workspace">
-                <div id="play-lyrics-box" class="output-box"></div>
-                <div id="floating-jumper-bar" class="play-right-bar"></div>
-            </div>
-        </div>
-    </div>
-
-</div>
+>
 
 <!-- ADD SONG TITLE MODAL -->
 <div id="add-song-title-modal" class="drawer-overlay"
@@ -970,44 +969,56 @@ let lineColorsDirty = false;
 const notesSharp = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const notesFlat = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
 
-/* LIVE BROADCAST CONTROLLER & SYNC */
+/* MANUAL PUSH SYNC CONTROLLER */
 
-let isLiveBroadcasting = false;
-
-function toggleLiveBroadcast() {
-    isLiveBroadcasting = !isLiveBroadcasting;
-    const btn = document.getElementById("live-toggle-btn");
-
-    if (!btn) return;
-
-    if (isLiveBroadcasting) {
-        btn.style.background = "#dc2626"; // Red when active
-        btn.style.color = "#ffffff";
-        btn.innerHTML = "📡 LIVE";
-        
-        // Broadcast current song immediately upon turning Live ON
-        if (currentPlayingSong && currentPlayingSong.title) {
-            broadcastLiveSession(currentPlayingSong.title, 0, true);
-        }
-    } else {
-        btn.style.background = "#334155"; // Muted when off
-        btn.style.color = "#94a3b8";
-        btn.innerHTML = "🔴 Offline";
-    }
-}
+let currentSectionIndex = 0;
 
 const localLiveChannel = typeof BroadcastChannel !== "undefined" 
     ? new BroadcastChannel("lineup_maker_live_sync") 
     : null;
 
-function broadcastLiveSession(songTitle, sectionIndex = 0, force = false) {
-    if (!isLiveBroadcasting && !force) return;
+function manualPushSync() {
+    if (!currentPlayingSong || !currentPlayingSong.title) {
+        alert("No song currently active to push.");
+        return;
+    }
 
     const payload = {
-        title: songTitle,
-        sectionIndex: sectionIndex,
+        title: currentPlayingSong.title,
+        sectionIndex: currentSectionIndex,
         timestamp: Date.now()
     };
+
+    // 1. Local Wi-Fi / Offline Broadcast
+    try {
+        localStorage.setItem("lineUpMaker_liveSession", JSON.stringify(payload));
+        if (localLiveChannel) {
+            localLiveChannel.postMessage(payload);
+        }
+    } catch (err) {
+        console.error("Local sync error:", err);
+    }
+
+    // 2. Firebase Cloud Broadcast (Online)
+    if (window.mobilePresenterFirebase && navigator.onLine) {
+        const db = window.mobilePresenterFirebase.db;
+        const ref = window.mobilePresenterFirebase.ref;
+        const set = window.mobilePresenterFirebase.set;
+
+        set(ref(db, 'lineUpMaker/liveSession'), payload)
+            .then(() => {
+                const btn = document.querySelector(".btn-success[onclick*='manualPushSync']");
+                if (btn) {
+                    const originalText = btn.textContent;
+                    btn.textContent = "✅ Pushed!";
+                    setTimeout(() => btn.textContent = originalText, 1200);
+                }
+            })
+            .catch(err => {
+                console.warn("Firebase offline sync error:", err);
+            });
+    }
+}
 
     // 1. Local Wi-Fi / Offline Broadcast
     try {
@@ -1766,11 +1777,13 @@ function detectSongSections(content) {
     return sections;
 }
 
-function jumpToSongSection(index, shouldBroadcast = true) {
+function jumpToSongSection(index) {
     const box = document.getElementById("play-lyrics-box");
     const jumper = document.getElementById("floating-jumper-bar");
 
     if (!box || !jumper) return;
+
+    currentSectionIndex = index; // Save current index for manual push
 
     const blocks = box.querySelectorAll(".jumper-section-block");
     const buttons = jumper.querySelectorAll(".jumper-chip");
@@ -1790,11 +1803,6 @@ function jumpToSongSection(index, shouldBroadcast = true) {
         behavior: "smooth",
         block: "center"
     });
-
-    // Broadcast section change to connected devices (Offline + Online)
-    if (shouldBroadcast && typeof currentPlayingSong !== "undefined" && currentPlayingSong.title) {
-        broadcastLiveSession(currentPlayingSong.title, index);
-    }
 }
 
 /* SONG DISPLAY */
@@ -2504,8 +2512,6 @@ async function confirmSaveActiveLineUp() {
     }
 }
 
-/* PLAY SONG */
-
 function playSong(title, shouldBroadcast = true) {
     if (!(title in songsDatabase)) {
         return alert("Song not found.");
@@ -2522,15 +2528,12 @@ function playSong(title, shouldBroadcast = true) {
     };
 
     lineColorsDirty = false;
+    currentSectionIndex = 0; // Reset section pointer
 
     document.getElementById("play-song-title").textContent = title;
 
     renderPlayScreen();
     switchView("play");
-
-    if (shouldBroadcast) {
-        broadcastLiveSession(title, 0);
-    }
 }
 
 /* RECEIVE LIVE COMMANDS (INCOMING SYNC LISTENERS) */

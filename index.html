@@ -660,11 +660,6 @@ header {
             <button onclick="transposeGlobal(1)">+</button>
         </div>
 
-        <!-- GO LIVE TOGGLE BUTTON -->
-        <button id="live-toggle-btn" class="tool-btn" onclick="toggleLiveBroadcast()" style="background:#334155;color:#94a3b8;">
-            🔴 Offline
-        </button>
-
         <button class="tool-btn" onclick="openDrawer('drawer-setlist')">📋 Set List</button>
         <button class="tool-btn" onclick="openDrawer('drawer-songs')">🎵 Songs</button>
         <button class="tool-btn" onclick="openAddSongModal()">➕ Add Song</button>
@@ -774,7 +769,7 @@ header {
         </div>
     </div>
 
-        <!-- PLAY -->
+    <!-- PLAY -->
     <div id="view-play" class="view-section">
         <div class="full-screen-container">
             <div class="edit-topbar">
@@ -788,7 +783,14 @@ header {
 
                 <button id="play-edit-btn" class="btn btn-sm btn-primary" onclick="openPlayToEdit()">Edit</button>
             </div>
->
+            <div class="play-workspace">
+                <div id="play-lyrics-box" class="output-box"></div>
+                <div id="floating-jumper-bar" class="play-right-bar"></div>
+            </div>
+        </div>
+    </div>
+
+</div>
 
 <!-- ADD SONG TITLE MODAL -->
 <div id="add-song-title-modal" class="drawer-overlay"
@@ -1017,28 +1019,6 @@ function manualPushSync() {
             .catch(err => {
                 console.warn("Firebase offline sync error:", err);
             });
-    }
-}
-
-    // 1. Local Wi-Fi / Offline Broadcast
-    try {
-        localStorage.setItem("lineUpMaker_liveSession", JSON.stringify(payload));
-        if (localLiveChannel) {
-            localLiveChannel.postMessage(payload);
-        }
-    } catch (err) {
-        console.error("Local sync error:", err);
-    }
-
-    // 2. Firebase Cloud Broadcast (Online)
-    if (window.mobilePresenterFirebase && navigator.onLine) {
-        const db = window.mobilePresenterFirebase.db;
-        const ref = window.mobilePresenterFirebase.ref;
-        const set = window.mobilePresenterFirebase.set;
-
-        set(ref(db, 'lineUpMaker/liveSession'), payload).catch(err => {
-            console.warn("Firebase offline, local sync active:", err);
-        });
     }
 }
 
@@ -1871,7 +1851,7 @@ function renderSongContent(box, jumper, isPlayMode) {
         const button = document.createElement("button");
         button.className = "jumper-chip";
         button.textContent = section.label;
-        button.onclick = () => jumpToSongSection(index, true);
+        button.onclick = () => jumpToSongSection(index);
 
         jumper.appendChild(button);
     });
@@ -2175,7 +2155,7 @@ function playLineUpSongAt(index) {
         return;
     }
 
-    playSong(title, true);
+    playSong(title);
     document.getElementById("play-song-title").textContent =
         category + " — " + title;
 }
@@ -2214,7 +2194,7 @@ function renderSongsDatabase() {
 
         name.textContent = "🎵 " + title;
         name.onclick = () => {
-            playSong(title, true);
+            playSong(title);
             closeDrawer("drawer-songs");
         };
 
@@ -2355,7 +2335,7 @@ async function saveSongFromEditor() {
         songsDatabase[title] = content;
         alert("Song saved successfully!");
 
-        playSong(title, true);
+        playSong(title);
     } catch (err) {
         console.error(err);
         alert("Failed to save song: " + err.message);
@@ -2512,7 +2492,9 @@ async function confirmSaveActiveLineUp() {
     }
 }
 
-function playSong(title, shouldBroadcast = true) {
+/* PLAY SONG */
+
+function playSong(title) {
     if (!(title in songsDatabase)) {
         return alert("Song not found.");
     }
@@ -2543,12 +2525,12 @@ function handleIncomingLiveSync(liveData) {
 
     if (liveData.title !== currentPlayingSong.title) {
         if (songsDatabase[liveData.title]) {
-            playSong(liveData.title, false);
+            playSong(liveData.title);
         }
     }
 
     if (typeof liveData.sectionIndex === 'number' && document.getElementById("view-play").classList.contains("active")) {
-        jumpToSongSection(liveData.sectionIndex, false);
+        jumpToSongSection(liveData.sectionIndex);
     }
 }
 

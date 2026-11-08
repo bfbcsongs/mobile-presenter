@@ -660,6 +660,11 @@ header {
             <button onclick="transposeGlobal(1)">+</button>
         </div>
 
+        <!-- GO LIVE TOGGLE BUTTON -->
+        <button id="live-toggle-btn" class="tool-btn" onclick="toggleLiveBroadcast()" style="background:#334155;color:#94a3b8;">
+            🔴 Offline
+        </button>
+
         <button class="tool-btn" onclick="openDrawer('drawer-setlist')">📋 Set List</button>
         <button class="tool-btn" onclick="openDrawer('drawer-songs')">🎵 Songs</button>
         <button class="tool-btn" onclick="openAddSongModal()">➕ Add Song</button>
@@ -775,7 +780,7 @@ header {
             <div class="edit-topbar">
                 <button class="btn btn-sm" onclick="goBackFromPlay()">⬅ Back</button>
                 <span id="play-song-title" style="font-weight:bold;color:var(--section);">Song Title</span>
-                <button class="btn btn-sm btn-primary" onclick="openPlayToEdit()">Edit</button>
+                <button id="play-edit-btn" class="btn btn-sm btn-primary" onclick="openPlayToEdit()">Edit</button>
             </div>
             <div class="play-workspace">
                 <div id="play-lyrics-box" class="output-box"></div>
@@ -899,7 +904,7 @@ header {
 <!-- QR -->
 <div id="qr-modal" class="drawer-overlay" onclick="closeModal('qr-modal')">
     <div class="drawer-panel" onclick="event.stopPropagation()" style="align-items:center;text-align:center;">
-        <h3 style="font-size:0.95rem;">Local Wi-Fi QR Code</h3>
+        <h3 style="font-size:0.95rem;">Viewer QR Code (Read-Only)</h3>
         <div id="qrcode" style="background:#fff;padding:10px;border-radius:8px;"></div>
         <p style="font-size:0.75rem;color:var(--text-muted);word-break:break-all;" id="wifi-link-text"></p>
         <button class="btn" onclick="closeModal('qr-modal')">Close</button>
@@ -965,13 +970,39 @@ let lineColorsDirty = false;
 const notesSharp = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const notesFlat = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
 
-/* UNIFIED LIVE BROADCAST (OFFLINE LOCAL WI-FI + ONLINE FIREBASE) */
+/* LIVE BROADCAST CONTROLLER & SYNC */
+
+let isLiveBroadcasting = false;
+
+function toggleLiveBroadcast() {
+    isLiveBroadcasting = !isLiveBroadcasting;
+    const btn = document.getElementById("live-toggle-btn");
+
+    if (!btn) return;
+
+    if (isLiveBroadcasting) {
+        btn.style.background = "#dc2626"; // Red when active
+        btn.style.color = "#ffffff";
+        btn.innerHTML = "📡 LIVE";
+        
+        // Broadcast current song immediately upon turning Live ON
+        if (currentPlayingSong && currentPlayingSong.title) {
+            broadcastLiveSession(currentPlayingSong.title, 0, true);
+        }
+    } else {
+        btn.style.background = "#334155"; // Muted when off
+        btn.style.color = "#94a3b8";
+        btn.innerHTML = "🔴 Offline";
+    }
+}
 
 const localLiveChannel = typeof BroadcastChannel !== "undefined" 
     ? new BroadcastChannel("lineup_maker_live_sync") 
     : null;
 
-function broadcastLiveSession(songTitle, sectionIndex = 0) {
+function broadcastLiveSession(songTitle, sectionIndex = 0, force = false) {
+    if (!isLiveBroadcasting && !force) return;
+
     const payload = {
         title: songTitle,
         sectionIndex: sectionIndex,
@@ -2521,16 +2552,17 @@ function handleIncomingLiveSync(liveData) {
 /* QR */
 
 function openQRModal() {
-    const localUrl = window.location.href;
+    const baseUrl = window.location.origin + window.location.pathname;
+    const viewerUrl = baseUrl + "?view=readonly";
 
-    document.getElementById("wifi-link-text").textContent = localUrl;
+    document.getElementById("wifi-link-text").textContent = viewerUrl;
 
     const qr = document.getElementById("qrcode");
     qr.innerHTML = "";
 
     if (typeof QRCode !== "undefined") {
         new QRCode(qr, {
-            text: localUrl,
+            text: viewerUrl,
             width: 150,
             height: 150
         });
@@ -2579,9 +2611,27 @@ async function confirmAddCategory() {
 /* INITIALIZE */
 
 document.addEventListener("DOMContentLoaded", () => {
+    // Check if opened via Read-Only QR Code Viewer link
+    const urlParams = new URLSearchParams(window.location.search);
+    const isReadOnlyViewer = urlParams.get("view") === "readonly";
+
+    if (isReadOnlyViewer) {
+        // Hide operator toolbar tools and edit buttons for viewers
+        const toolbar = document.querySelector(".toolbar-tools");
+        if (toolbar) toolbar.style.display = "none";
+
+        const editBtn = document.getElementById("play-edit-btn");
+        if (editBtn) editBtn.style.display = "none";
+        
+        const brandTitle = document.querySelector(".brand-title");
+        if (brandTitle) brandTitle.textContent = "Line-up Maker (Viewer)";
+
+        // Jump straight to play screen for viewers
+        switchView("play", false);
+    }
+
     renderNewLineUpForm();
     renderSetList();
-
     renderSongsDatabase();
 
     applySongFontSize(DEFAULT_SONG_FONT_SIZE);
@@ -2614,7 +2664,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
-    console.info("Line-up Maker cloud edition loaded.");
+    console.info("Line-up Maker cloud edition loaded. Viewer mode:", isReadOnlyViewer);
 });
 </script>
 

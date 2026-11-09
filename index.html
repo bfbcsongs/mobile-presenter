@@ -776,9 +776,9 @@ header {
                 <button class="btn btn-sm" onclick="goBackFromPlay()">⬅ Back</button>
                 <span id="play-song-title" style="font-weight:bold;color:var(--section);">Song Title</span>
                 
-                <!-- MANUAL SYNC PUSH BUTTON -->
-                <button class="btn btn-sm btn-success" onclick="manualPushSync()" title="Push current view to all viewer screens">
-                    📡 Push to Viewers
+                <!-- PUSH EDITED SONG UPDATE BUTTON -->
+                <button class="btn btn-sm btn-success" onclick="pushSongUpdate()" title="Push edited song changes to viewers without rescanning QR">
+                    📡 Push Update
                 </button>
 
                 <button id="play-edit-btn" class="btn btn-sm btn-primary" onclick="openPlayToEdit()">Edit</button>
@@ -825,7 +825,6 @@ header {
         <h3 id="show-setlist-title" style="color:var(--section);font-size:0.95rem;">Set List Details</h3>
         <div id="show-setlist-content" style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;color:var(--text-muted);font-size:0.8rem;"></div>
         
-        <!-- EDIT BUTTON IS INCLUDED HERE -->
         <div style="display:flex;gap:5px;margin-top:5px;flex-wrap:wrap;">
             <button class="btn btn-sm btn-primary" style="flex:1;" id="show-edit-btn">✏️ Edit Line-up</button>
             <button class="btn btn-sm" style="flex:1;background:#38bdf8;color:#0f172a;font-weight:bold;" id="show-import-btn">📥 Import</button>
@@ -937,10 +936,7 @@ let songKeys = {};
 let songTitles = {};
 let setLists = [];
 
-/* EDIT SET LIST REFERENCE */
 let editingSetListRef = null;
-
-/* ZOOM */
 
 let songZoomLevels = {};
 let currentSongFontSize = 16;
@@ -957,17 +953,11 @@ let activeCategoryToAssign = null;
 let viewHistory = ["home"];
 let pendingSetListIndex = null;
 
-/* BACK NAVIGATION CONTROL */
-
 let allowBrowserExit = false;
 let browserBackGuardInstalled = false;
 
-/* ADD SONG */
-
 let newSongTitle = "";
 let isNewSongDraft = false;
-
-/* LINE COLORS */
 
 let songLineColors = {};
 let currentLineColors = {};
@@ -978,19 +968,17 @@ let lineColorsDirty = false;
 const notesSharp = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const notesFlat = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
 
-/* MANUAL PUSH SYNC CONTROLLER (INCLUDES SCROLL PERCENTAGE & JUMPER INDEX) */
-
 let currentSectionIndex = 0;
+let isProgrammaticScroll = false; // Prevents echo loop on scroll sync
 
 const localLiveChannel = typeof BroadcastChannel !== "undefined" 
     ? new BroadcastChannel("lineup_maker_live_sync") 
     : null;
 
-function manualPushSync() {
-    if (!currentPlayingSong || !currentPlayingSong.title) {
-        alert("No song currently active to push.");
-        return;
-    }
+/* AUTOMATIC LIVE SYNC TRANSMISSION (JUMPER, SONG, & SCROLL) */
+
+function broadcastLiveSync(dataOverride = null) {
+    if (!currentPlayingSong || !currentPlayingSong.title) return;
 
     const box = document.getElementById("play-lyrics-box");
     let scrollPercent = 0;
@@ -998,14 +986,14 @@ function manualPushSync() {
         scrollPercent = box.scrollTop / (box.scrollHeight - box.clientHeight);
     }
 
-    const payload = {
+    const payload = dataOverride || {
         title: currentPlayingSong.title,
+        content: currentPlayingSong.content,
         sectionIndex: currentSectionIndex,
         scrollPercent: scrollPercent,
         timestamp: Date.now()
     };
 
-    // 1. Local Wi-Fi / Offline Broadcast
     try {
         localStorage.setItem("lineUpMaker_liveSession", JSON.stringify(payload));
         if (localLiveChannel) {
@@ -1015,24 +1003,40 @@ function manualPushSync() {
         console.error("Local sync error:", err);
     }
 
-    // 2. Firebase Cloud Broadcast (Online)
     if (window.mobilePresenterFirebase && navigator.onLine) {
         const db = window.mobilePresenterFirebase.db;
         const ref = window.mobilePresenterFirebase.ref;
         const set = window.mobilePresenterFirebase.set;
 
-        set(ref(db, 'lineUpMaker/liveSession'), payload)
-            .then(() => {
-                const btn = document.querySelector(".btn-success[onclick*='manualPushSync']");
-                if (btn) {
-                    const originalText = btn.textContent;
-                    btn.textContent = "✅ Pushed!";
-                    setTimeout(() => btn.textContent = originalText, 1200);
-                }
-            })
-            .catch(err => {
-                console.warn("Firebase offline sync error:", err);
-            });
+        set(ref(db, 'lineUpMaker/liveSession'), payload).catch(err => {
+            console.warn("Firebase sync error:", err);
+        });
+    }
+}
+
+/* PUSH EDIT UPDATE BUTTON (FORCED SYNC ON EDITED SONG CHANGES WITHOUT RESCANNING QR) */
+
+function pushSongUpdate() {
+    if (!currentPlayingSong || !currentPlayingSong.title) {
+        alert("No active song to push.");
+        return;
+    }
+
+    const payload = {
+        title: currentPlayingSong.title,
+        content: currentPlayingSong.content, // Latest lyrics/chords
+        sectionIndex: currentSectionIndex,
+        scrollPercent: 0,
+        timestamp: Date.now()
+    };
+
+    broadcastLiveSync(payload);
+
+    const btn = document.querySelector(".btn-success[onclick*='pushSongUpdate']");
+    if (btn) {
+        const originalText = btn.textContent;
+        btn.textContent = "✅ Pushed!";
+        setTimeout(() => btn.textContent = originalText, 1200);
     }
 }
 
@@ -1259,7 +1263,6 @@ function installBrowserBackGuard() {
 /* DRAWERS AND MODALS */
 
 function openDrawer(drawerId) {
-    // Kung binubuksan ang New Line-up drawer galing sa topbar (hindi galing sa edit), i-reset ang reference
     if (drawerId === 'drawer-newlineup' && !editingSetListRef) {
         const heading = document.getElementById("lineup-form-heading");
         if (heading) heading.textContent = "Create New Line-up";
@@ -1800,6 +1803,11 @@ function jumpToSongSection(index) {
         behavior: "smooth",
         block: "center"
     });
+
+    // Auto broadcast live sync on jumper click
+    if (!isProgrammaticScroll) {
+        broadcastLiveSync();
+    }
 }
 
 /* SONG DISPLAY */
@@ -1882,6 +1890,20 @@ function renderPlayScreen() {
         document.getElementById("floating-jumper-bar"),
         true
     );
+
+    // Scroll Sync Event Listener
+    const playBox = document.getElementById("play-lyrics-box");
+    if (playBox && !playBox.dataset.scrollListenerAttached) {
+        playBox.dataset.scrollListenerAttached = "true";
+        let scrollTimeout;
+        playBox.addEventListener("scroll", () => {
+            if (isProgrammaticScroll) return;
+            clearTimeout(scrollTimeout);
+            scrollTimeout = setTimeout(() => {
+                broadcastLiveSync();
+            }, 100);
+        });
+    }
 }
 
 function renderEditScreen() {
@@ -1980,7 +2002,6 @@ function renderSetList() {
             openShowSetListDrawer(sl);
         };
 
-        // DIRECT EDIT BUTTON SA MAIN LIST VIEW
         const editLineupBtn = document.createElement("button");
         editLineupBtn.className = "btn btn-sm btn-primary";
         editLineupBtn.textContent = "Edit";
@@ -2033,7 +2054,6 @@ function openShowSetListDrawer(sl) {
         contentBox.innerHTML = '<span class="empty-message">No songs in this line-up.</span>';
     }
 
-    // EDIT LINE-UP BUTTON HANDLER INSIDE SHOW MODAL
     const editBtn = document.getElementById("show-edit-btn");
     if (editBtn) {
         editBtn.onclick = () => {
@@ -2595,20 +2615,42 @@ function playSong(title) {
 
     renderPlayScreen();
     switchView("play");
+
+    // Automatically broadcast live sync when playing a song
+    broadcastLiveSync();
 }
 
-/* RECEIVE LIVE COMMANDS & SCROLL SYNC (INCOMING SYNC LISTENERS) */
+/* AUTOMATIC LIVE SYNC LISTENER (RECEIVES JUMPER, SCROLL & EDITED CONTENT) */
 
 function handleIncomingLiveSync(liveData) {
     if (!liveData || !liveData.title) return;
 
-    if (liveData.title !== currentPlayingSong.title) {
-        if (songsDatabase[liveData.title]) {
-            playSong(liveData.title);
+    let contentChanged = false;
+    if (liveData.content && liveData.content !== currentPlayingSong.content) {
+        currentPlayingSong.content = liveData.content;
+        contentChanged = true;
+    }
+
+    if (liveData.title !== currentPlayingSong.title || contentChanged) {
+        if (songsDatabase[liveData.title] || liveData.content) {
+            if (liveData.content) {
+                songsDatabase[liveData.title] = liveData.content;
+            }
+            currentPlayingSong = {
+                title: liveData.title,
+                content: songsDatabase[liveData.title],
+                fontSize: getSongFontSize(liveData.title)
+            };
+            if (document.getElementById("view-play").classList.contains("active")) {
+                renderPlayScreen();
+                document.getElementById("play-song-title").textContent = liveData.title;
+            }
         }
     }
 
     if (document.getElementById("view-play").classList.contains("active")) {
+        isProgrammaticScroll = true; // Block echo loop
+
         if (typeof liveData.sectionIndex === 'number') {
             jumpToSongSection(liveData.sectionIndex);
         }
@@ -2623,6 +2665,10 @@ function handleIncomingLiveSync(liveData) {
                 });
             }
         }
+
+        setTimeout(() => {
+            isProgrammaticScroll = false;
+        }, 300);
     }
 }
 

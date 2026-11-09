@@ -978,7 +978,7 @@ let lineColorsDirty = false;
 const notesSharp = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const notesFlat = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
 
-/* MANUAL PUSH SYNC CONTROLLER */
+/* MANUAL PUSH SYNC CONTROLLER (INCLUDES SCROLL PERCENTAGE & JUMPER INDEX) */
 
 let currentSectionIndex = 0;
 
@@ -1005,6 +1005,7 @@ function manualPushSync() {
         timestamp: Date.now()
     };
 
+    // 1. Local Wi-Fi / Offline Broadcast
     try {
         localStorage.setItem("lineUpMaker_liveSession", JSON.stringify(payload));
         if (localLiveChannel) {
@@ -1014,6 +1015,7 @@ function manualPushSync() {
         console.error("Local sync error:", err);
     }
 
+    // 2. Firebase Cloud Broadcast (Online)
     if (window.mobilePresenterFirebase && navigator.onLine) {
         const db = window.mobilePresenterFirebase.db;
         const ref = window.mobilePresenterFirebase.ref;
@@ -1257,6 +1259,15 @@ function installBrowserBackGuard() {
 /* DRAWERS AND MODALS */
 
 function openDrawer(drawerId) {
+    // Kung binubuksan ang New Line-up drawer galing sa topbar (hindi galing sa edit), i-reset ang reference
+    if (drawerId === 'drawer-newlineup' && !editingSetListRef) {
+        const heading = document.getElementById("lineup-form-heading");
+        if (heading) heading.textContent = "Create New Line-up";
+        const wlInput = document.getElementById("new-wl-name");
+        if (wlInput) wlInput.value = "";
+        renderNewLineUpForm();
+    }
+
     document.querySelectorAll(".drawer-overlay").forEach(el =>
         el.style.display = "none"
     );
@@ -1969,6 +1980,16 @@ function renderSetList() {
             openShowSetListDrawer(sl);
         };
 
+        // DIRECT EDIT BUTTON SA MAIN LIST VIEW
+        const editLineupBtn = document.createElement("button");
+        editLineupBtn.className = "btn btn-sm btn-primary";
+        editLineupBtn.textContent = "Edit";
+
+        editLineupBtn.onclick = () => {
+            closeDrawer("drawer-setlist");
+            openEditLineUpForm(sl);
+        };
+
         const del = document.createElement("button");
         del.className = "btn btn-sm btn-danger";
         del.textContent = "Delete";
@@ -1984,7 +2005,7 @@ function renderSetList() {
             }
         };
 
-        buttons.append(load, showBtn, del);
+        buttons.append(load, showBtn, editLineupBtn, del);
         row.append(heading, buttons);
         container.appendChild(row);
     });
@@ -2012,7 +2033,7 @@ function openShowSetListDrawer(sl) {
         contentBox.innerHTML = '<span class="empty-message">No songs in this line-up.</span>';
     }
 
-    // EDIT LINE-UP BUTTON HANDLER
+    // EDIT LINE-UP BUTTON HANDLER INSIDE SHOW MODAL
     const editBtn = document.getElementById("show-edit-btn");
     if (editBtn) {
         editBtn.onclick = () => {
@@ -2022,46 +2043,50 @@ function openShowSetListDrawer(sl) {
     }
 
     const importBtn = document.getElementById("show-import-btn");
-    importBtn.onclick = () => {
-        try {
-            let localCache = JSON.parse(localStorage.getItem("localWifiSetLists") || "[]");
-            const exists = localCache.some(item => item.worshipLeader === sl.worshipLeader && item.createdAt === sl.createdAt);
-            if (!exists) {
-                localCache.push(sl);
-                localStorage.setItem("localWifiSetLists", JSON.stringify(localCache));
-                alert("Successfully downloaded/imported line-up to local storage for local Wi-Fi use!");
-            } else {
-                alert("This line-up is already imported in local storage.");
+    if (importBtn) {
+        importBtn.onclick = () => {
+            try {
+                let localCache = JSON.parse(localStorage.getItem("localWifiSetLists") || "[]");
+                const exists = localCache.some(item => item.worshipLeader === sl.worshipLeader && item.createdAt === sl.createdAt);
+                if (!exists) {
+                    localCache.push(sl);
+                    localStorage.setItem("localWifiSetLists", JSON.stringify(localCache));
+                    alert("Successfully downloaded/imported line-up to local storage for local Wi-Fi use!");
+                } else {
+                    alert("This line-up is already imported in local storage.");
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Failed to import to local storage.");
             }
-        } catch (err) {
-            console.error(err);
-            alert("Failed to import to local storage.");
-        }
-    };
+        };
+    }
 
     const deleteLocalBtn = document.getElementById("show-delete-local-btn");
-    deleteLocalBtn.onclick = () => {
-        try {
-            let localCache = JSON.parse(localStorage.getItem("localWifiSetLists") || "[]");
-            const initialLength = localCache.length;
-            localCache = localCache.filter(item => !(item.worshipLeader === sl.worshipLeader && item.createdAt === sl.createdAt));
-            
-            if (localCache.length < initialLength) {
-                localStorage.setItem("localWifiSetLists", JSON.stringify(localCache));
-                alert("Removed from local storage only. Firebase files remain safe!");
-            } else {
-                alert("This line-up was not found in local storage.");
+    if (deleteLocalBtn) {
+        deleteLocalBtn.onclick = () => {
+            try {
+                let localCache = JSON.parse(localStorage.getItem("localWifiSetLists") || "[]");
+                const initialLength = localCache.length;
+                localCache = localCache.filter(item => !(item.worshipLeader === sl.worshipLeader && item.createdAt === sl.createdAt));
+                
+                if (localCache.length < initialLength) {
+                    localStorage.setItem("localWifiSetLists", JSON.stringify(localCache));
+                    alert("Removed from local storage only. Firebase files remain safe!");
+                } else {
+                    alert("This line-up was not found in local storage.");
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Failed to delete from local storage.");
             }
-        } catch (err) {
-            console.error(err);
-            alert("Failed to delete from local storage.");
-        }
-    };
+        };
+    }
 
     openDrawer("drawer-show-setlist");
 }
 
-/* OPEN & SAVE EDITED LINE-UP */
+/* OPEN EDITED LINE-UP FORM */
 
 function openEditLineUpForm(sl) {
     editingSetListRef = sl;
@@ -2572,7 +2597,7 @@ function playSong(title) {
     switchView("play");
 }
 
-/* RECEIVE LIVE COMMANDS (INCOMING SYNC LISTENERS) */
+/* RECEIVE LIVE COMMANDS & SCROLL SYNC (INCOMING SYNC LISTENERS) */
 
 function handleIncomingLiveSync(liveData) {
     if (!liveData || !liveData.title) return;

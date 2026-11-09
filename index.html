@@ -397,6 +397,7 @@ header {
     white-space: pre-wrap;
     overflow-wrap: break-word;
     -webkit-overflow-scrolling: touch;
+    box-sizing: border-box;
 }
 
 #editor-textarea::placeholder {
@@ -425,11 +426,13 @@ header {
     text-align: center;
     white-space: pre-wrap;
     overflow-wrap: break-word;
+    box-sizing: border-box;
 }
 
 #editor-textarea.color-mirror {
     color: transparent !important;
-    caret-color: var(--text-main);
+    caret-color: #f8fafc !important;
+    -webkit-text-fill-color: transparent;
 }
 
 #editor-color-overlay.active {
@@ -651,7 +654,7 @@ header {
 <body>
 
 <header>
-    <span class="brand-title">Line-up Maker</span>
+    <span class="brand-title">BFBC LINE-UP</span>
 
     <div class="toolbar-tools">
         <div class="trans-badge">
@@ -1202,7 +1205,7 @@ function goBack(fromSystemBack = false) {
     }
 
     const confirmed = window.confirm(
-        "Are you sure you want to leave Line-up Maker?"
+        "Are you sure you want to leave BFBC LINE-UP?"
     );
 
     if (!confirmed) return;
@@ -1749,7 +1752,6 @@ function detectSongSections(content) {
     if (!content) return [];
     const sections = [];
 
-    // Detects Intro, Verse (1, 2, 3), Pre, Pre-Chorus, Chorus (1, 2, 3), Bridge, Instrumental, and Outro
     const markerPattern =
         /^[ \t]*\[(Intro|Verse(?:[ \t]*\d+)?|Pre-?Chorus|Pre|Chorus(?:[ \t]*\d+)?|Bridge|Instrumental|Outro)\][ \t]*$/gim;
 
@@ -1791,7 +1793,6 @@ function jumpToSongSection(index, shouldBroadcast = true) {
         block: "center"
     });
 
-    // Broadcast section change to connected devices (Offline + Online)
     if (shouldBroadcast && typeof currentPlayingSong !== "undefined" && currentPlayingSong.title) {
         broadcastLiveSession(currentPlayingSong.title, index);
     }
@@ -2624,7 +2625,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (editBtn) editBtn.style.display = "none";
         
         const brandTitle = document.querySelector(".brand-title");
-        if (brandTitle) brandTitle.textContent = "Line-up Maker (Viewer)";
+        if (brandTitle) brandTitle.textContent = "BFBC LINE-UP (Viewer)";
 
         // Jump straight to play screen for viewers
         switchView("play", false);
@@ -2664,7 +2665,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
-    console.info("Line-up Maker cloud edition loaded. Viewer mode:", isReadOnlyViewer);
+    console.info("BFBC LINE-UP cloud edition loaded. Viewer mode:", isReadOnlyViewer);
 });
 </script>
 

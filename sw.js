@@ -1,22 +1,28 @@
-const CACHE_NAME = 'lineup-maker-v1';
+const CACHE_NAME = 'lineup-maker-v2'; // Bump this version on changes
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js'
 ];
 
-// Install Event: Pre-cache app shell assets
+// Install Event: Safe caching (won't crash the whole install if one asset fails)
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
+    caches.open(CACHE_NAME).then(async (cache) => {
       console.log('Pre-caching app shell assets');
-      return cache.addAll(ASSETS_TO_CACHE);
+      for (const asset of ASSETS_TO_CACHE) {
+        try {
+          await cache.add(asset);
+        } catch (err) {
+          console.warn('Failed to cache asset during install:', asset, err);
+        }
+      }
     })
   );
   self.skipWaiting();
 });
 
-// Activate Event: Cleanup old caches
+// Activate Event: Cleanup old caches & claim clients immediately
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
@@ -28,29 +34,51 @@ self.addEventListener('activate', (event) => {
           }
         })
       );
-    })
+    }).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
-// Fetch Event: Cache First with Network Fallback
+// Fetch Event: Network-First for HTML/Navigation, Cache-First for static assets
 self.addEventListener('fetch', (event) => {
-  // Ignore Firebase realtime/auth API calls so Firebase handles its own logic
-  if (event.request.url.includes('firebase') || event.request.url.includes('googleapis')) {
+  const url = new URL(event.request.url);
+
+  // Bypass Firebase, Google APIs, and external dynamic requests
+  if (url.hostname.includes('firebase') || url.hostname.includes('googleapis') || url.hostname.includes('firebaseio')) {
     return;
   }
 
+  // For HTML navigation, try network first so you always get the latest layout/code instantly
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          return caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, networkResponse.clone());
+            return networkResponse;
+          });
+        })
+        .catch(() => {
+          return caches.match(event.request).then((cached) => {
+            return cached || caches.match('/index.html');
+          });
+        })
+    );
+    return;
+  }
+
+  // For other static assets (scripts, styles, CDN files), use Cache-First with background update
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      return fetch(event.request).catch(() => {
-        // Return index.html as offline fallback for page navigations
-        if (event.request.mode === 'navigate') {
-          return caches.match('/index.html');
+      const fetchPromise = fetch(event.request).then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, networkResponse.clone());
+          });
         }
-      });
+        return networkResponse;
+      }).catch(() => {/* offline fallback */});
+
+      return cachedResponse || fetchPromise;
     })
   );
 });

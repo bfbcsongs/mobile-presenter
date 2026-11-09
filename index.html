@@ -660,6 +660,11 @@ header {
             <button onclick="transposeGlobal(1)">+</button>
         </div>
 
+        <!-- GO LIVE TOGGLE BUTTON -->
+        <button id="live-toggle-btn" class="tool-btn" onclick="toggleLiveBroadcast()" style="background:#334155;color:#94a3b8;">
+            🔴 Offline
+        </button>
+
         <button class="tool-btn" onclick="openDrawer('drawer-setlist')">📋 Set List</button>
         <button class="tool-btn" onclick="openDrawer('drawer-songs')">🎵 Songs</button>
         <button class="tool-btn" onclick="openAddSongModal()">➕ Add Song</button>
@@ -775,12 +780,6 @@ header {
             <div class="edit-topbar">
                 <button class="btn btn-sm" onclick="goBackFromPlay()">⬅ Back</button>
                 <span id="play-song-title" style="font-weight:bold;color:var(--section);">Song Title</span>
-                
-                <!-- PUSH EDITED SONG UPDATE BUTTON -->
-                <button class="btn btn-sm btn-success" onclick="pushSongUpdate()" title="Push edited song changes to viewers without rescanning QR">
-                    📡 Push Update
-                </button>
-
                 <button id="play-edit-btn" class="btn btn-sm btn-primary" onclick="openPlayToEdit()">Edit</button>
             </div>
             <div class="play-workspace">
@@ -824,13 +823,10 @@ header {
     <div class="drawer-panel" onclick="event.stopPropagation()">
         <h3 id="show-setlist-title" style="color:var(--section);font-size:0.95rem;">Set List Details</h3>
         <div id="show-setlist-content" style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;color:var(--text-muted);font-size:0.8rem;"></div>
-        
-        <div style="display:flex;gap:5px;margin-top:5px;flex-wrap:wrap;">
-            <button class="btn btn-sm btn-primary" style="flex:1;" id="show-edit-btn">✏️ Edit Line-up</button>
-            <button class="btn btn-sm" style="flex:1;background:#38bdf8;color:#0f172a;font-weight:bold;" id="show-import-btn">📥 Import</button>
-            <button class="btn btn-sm btn-danger" style="flex:1;" id="show-delete-local-btn">🗑️ Delete</button>
+        <div style="display:flex;gap:8px;margin-top:5px;">
+            <button class="btn btn-primary" style="flex:1;" id="show-import-btn">📥 Import to Local</button>
+            <button class="btn btn-danger" style="flex:1;" id="show-delete-local-btn">🗑️ Delete Local</button>
         </div>
-        
         <button class="btn" onclick="closeDrawer('drawer-show-setlist')" style="margin-top:4px;">Close</button>
     </div>
 </div>
@@ -846,10 +842,10 @@ header {
     </div>
 </div>
 
-<!-- NEW / EDIT LINEUP -->
+<!-- NEW LINEUP -->
 <div id="drawer-newlineup" class="drawer-overlay" onclick="closeDrawer('drawer-newlineup')">
     <div class="drawer-panel" onclick="event.stopPropagation()">
-        <h3 style="color:var(--highlight);font-size:0.95rem;" id="lineup-form-heading">Create New Line-up</h3>
+        <h3 style="color:var(--highlight);font-size:0.95rem;">Create New Line-up</h3>
         <input type="text" id="new-wl-name" placeholder="Worship Leader Name..."
             style="background:#0f172a;border:1px solid #334155;color:#fff;padding:8px;border-radius:6px;">
         <div id="new-lineup-selectors" style="max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;"></div>
@@ -936,7 +932,7 @@ let songKeys = {};
 let songTitles = {};
 let setLists = [];
 
-let editingSetListRef = null;
+/* ZOOM */
 
 let songZoomLevels = {};
 let currentSongFontSize = 16;
@@ -953,11 +949,17 @@ let activeCategoryToAssign = null;
 let viewHistory = ["home"];
 let pendingSetListIndex = null;
 
+/* BACK NAVIGATION CONTROL */
+
 let allowBrowserExit = false;
 let browserBackGuardInstalled = false;
 
+/* ADD SONG */
+
 let newSongTitle = "";
 let isNewSongDraft = false;
+
+/* LINE COLORS */
 
 let songLineColors = {};
 let currentLineColors = {};
@@ -968,32 +970,46 @@ let lineColorsDirty = false;
 const notesSharp = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const notesFlat = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
 
-let currentSectionIndex = 0;
-let isProgrammaticScroll = false; // Prevents echo loop on scroll sync
+/* LIVE BROADCAST CONTROLLER & SYNC */
+
+let isLiveBroadcasting = false;
+
+function toggleLiveBroadcast() {
+    isLiveBroadcasting = !isLiveBroadcasting;
+    const btn = document.getElementById("live-toggle-btn");
+
+    if (!btn) return;
+
+    if (isLiveBroadcasting) {
+        btn.style.background = "#dc2626"; // Red when active
+        btn.style.color = "#ffffff";
+        btn.innerHTML = "📡 LIVE";
+        
+        // Broadcast current song immediately upon turning Live ON
+        if (currentPlayingSong && currentPlayingSong.title) {
+            broadcastLiveSession(currentPlayingSong.title, 0, true);
+        }
+    } else {
+        btn.style.background = "#334155"; // Muted when off
+        btn.style.color = "#94a3b8";
+        btn.innerHTML = "🔴 Offline";
+    }
+}
 
 const localLiveChannel = typeof BroadcastChannel !== "undefined" 
     ? new BroadcastChannel("lineup_maker_live_sync") 
     : null;
 
-/* AUTOMATIC LIVE SYNC TRANSMISSION (JUMPER, SONG, & SCROLL) */
+function broadcastLiveSession(songTitle, sectionIndex = 0, force = false) {
+    if (!isLiveBroadcasting && !force) return;
 
-function broadcastLiveSync(dataOverride = null) {
-    if (!currentPlayingSong || !currentPlayingSong.title) return;
-
-    const box = document.getElementById("play-lyrics-box");
-    let scrollPercent = 0;
-    if (box && box.scrollHeight > box.clientHeight) {
-        scrollPercent = box.scrollTop / (box.scrollHeight - box.clientHeight);
-    }
-
-    const payload = dataOverride || {
-        title: currentPlayingSong.title,
-        content: currentPlayingSong.content,
-        sectionIndex: currentSectionIndex,
-        scrollPercent: scrollPercent,
+    const payload = {
+        title: songTitle,
+        sectionIndex: sectionIndex,
         timestamp: Date.now()
     };
 
+    // 1. Local Wi-Fi / Offline Broadcast
     try {
         localStorage.setItem("lineUpMaker_liveSession", JSON.stringify(payload));
         if (localLiveChannel) {
@@ -1003,40 +1019,15 @@ function broadcastLiveSync(dataOverride = null) {
         console.error("Local sync error:", err);
     }
 
+    // 2. Firebase Cloud Broadcast (Online)
     if (window.mobilePresenterFirebase && navigator.onLine) {
         const db = window.mobilePresenterFirebase.db;
         const ref = window.mobilePresenterFirebase.ref;
         const set = window.mobilePresenterFirebase.set;
 
         set(ref(db, 'lineUpMaker/liveSession'), payload).catch(err => {
-            console.warn("Firebase sync error:", err);
+            console.warn("Firebase offline, local sync active:", err);
         });
-    }
-}
-
-/* PUSH EDIT UPDATE BUTTON (FORCED SYNC ON EDITED SONG CHANGES WITHOUT RESCANNING QR) */
-
-function pushSongUpdate() {
-    if (!currentPlayingSong || !currentPlayingSong.title) {
-        alert("No active song to push.");
-        return;
-    }
-
-    const payload = {
-        title: currentPlayingSong.title,
-        content: currentPlayingSong.content, // Latest lyrics/chords
-        sectionIndex: currentSectionIndex,
-        scrollPercent: 0,
-        timestamp: Date.now()
-    };
-
-    broadcastLiveSync(payload);
-
-    const btn = document.querySelector(".btn-success[onclick*='pushSongUpdate']");
-    if (btn) {
-        const originalText = btn.textContent;
-        btn.textContent = "✅ Pushed!";
-        setTimeout(() => btn.textContent = originalText, 1200);
     }
 }
 
@@ -1047,12 +1038,14 @@ function initializeCloudSync() {
     const ref = window.mobilePresenterFirebase.ref;
     const onValue = window.mobilePresenterFirebase.onValue;
 
+    // Sync Songs Database
     onValue(ref(db, 'lineUpMaker/songsDatabase'), (snapshot) => {
         songsDatabase = snapshot.val() || {};
         renderSongsDatabase();
         renderNewLineUpForm();
     });
 
+    // Sync Set Lists
     onValue(ref(db, 'lineUpMaker/setLists'), (snapshot) => {
         const val = snapshot.val();
         if (val) {
@@ -1063,6 +1056,7 @@ function initializeCloudSync() {
         renderSetList();
     });
 
+    // Sync Categories
     onValue(ref(db, 'lineUpMaker/categories'), (snapshot) => {
         const val = snapshot.val();
         if (val) {
@@ -1071,6 +1065,7 @@ function initializeCloudSync() {
         renderNewLineUpForm();
     });
 
+    // Sync Zoom Levels & Line Colors
     onValue(ref(db, 'lineUpMaker/songZoomLevels'), (snapshot) => {
         songZoomLevels = snapshot.val() || {};
     });
@@ -1079,6 +1074,7 @@ function initializeCloudSync() {
         songLineColors = snapshot.val() || {};
     });
 
+    // Sync Online Live Session
     onValue(ref(db, 'lineUpMaker/liveSession'), (snapshot) => {
         const liveData = snapshot.val();
         if (liveData) {
@@ -1263,14 +1259,6 @@ function installBrowserBackGuard() {
 /* DRAWERS AND MODALS */
 
 function openDrawer(drawerId) {
-    if (drawerId === 'drawer-newlineup' && !editingSetListRef) {
-        const heading = document.getElementById("lineup-form-heading");
-        if (heading) heading.textContent = "Create New Line-up";
-        const wlInput = document.getElementById("new-wl-name");
-        if (wlInput) wlInput.value = "";
-        renderNewLineUpForm();
-    }
-
     document.querySelectorAll(".drawer-overlay").forEach(el =>
         el.style.display = "none"
     );
@@ -1761,6 +1749,7 @@ function detectSongSections(content) {
     if (!content) return [];
     const sections = [];
 
+    // Detects Intro, Verse (1, 2, 3), Pre, Pre-Chorus, Chorus (1, 2, 3), Bridge, Instrumental, and Outro
     const markerPattern =
         /^[ \t]*\[(Intro|Verse(?:[ \t]*\d+)?|Pre-?Chorus|Pre|Chorus(?:[ \t]*\d+)?|Bridge|Instrumental|Outro)\][ \t]*$/gim;
 
@@ -1777,13 +1766,11 @@ function detectSongSections(content) {
     return sections;
 }
 
-function jumpToSongSection(index) {
+function jumpToSongSection(index, shouldBroadcast = true) {
     const box = document.getElementById("play-lyrics-box");
     const jumper = document.getElementById("floating-jumper-bar");
 
     if (!box || !jumper) return;
-
-    currentSectionIndex = index;
 
     const blocks = box.querySelectorAll(".jumper-section-block");
     const buttons = jumper.querySelectorAll(".jumper-chip");
@@ -1804,9 +1791,9 @@ function jumpToSongSection(index) {
         block: "center"
     });
 
-    // Auto broadcast live sync on jumper click
-    if (!isProgrammaticScroll) {
-        broadcastLiveSync();
+    // Broadcast section change to connected devices (Offline + Online)
+    if (shouldBroadcast && typeof currentPlayingSong !== "undefined" && currentPlayingSong.title) {
+        broadcastLiveSession(currentPlayingSong.title, index);
     }
 }
 
@@ -1876,7 +1863,7 @@ function renderSongContent(box, jumper, isPlayMode) {
         const button = document.createElement("button");
         button.className = "jumper-chip";
         button.textContent = section.label;
-        button.onclick = () => jumpToSongSection(index);
+        button.onclick = () => jumpToSongSection(index, true);
 
         jumper.appendChild(button);
     });
@@ -1890,20 +1877,6 @@ function renderPlayScreen() {
         document.getElementById("floating-jumper-bar"),
         true
     );
-
-    // Scroll Sync Event Listener
-    const playBox = document.getElementById("play-lyrics-box");
-    if (playBox && !playBox.dataset.scrollListenerAttached) {
-        playBox.dataset.scrollListenerAttached = "true";
-        let scrollTimeout;
-        playBox.addEventListener("scroll", () => {
-            if (isProgrammaticScroll) return;
-            clearTimeout(scrollTimeout);
-            scrollTimeout = setTimeout(() => {
-                broadcastLiveSync();
-            }, 100);
-        });
-    }
 }
 
 function renderEditScreen() {
@@ -2002,15 +1975,6 @@ function renderSetList() {
             openShowSetListDrawer(sl);
         };
 
-        const editLineupBtn = document.createElement("button");
-        editLineupBtn.className = "btn btn-sm btn-primary";
-        editLineupBtn.textContent = "Edit";
-
-        editLineupBtn.onclick = () => {
-            closeDrawer("drawer-setlist");
-            openEditLineUpForm(sl);
-        };
-
         const del = document.createElement("button");
         del.className = "btn btn-sm btn-danger";
         del.textContent = "Delete";
@@ -2026,13 +1990,13 @@ function renderSetList() {
             }
         };
 
-        buttons.append(load, showBtn, editLineupBtn, del);
+        buttons.append(load, showBtn, del);
         row.append(heading, buttons);
         container.appendChild(row);
     });
 }
 
-/* SHOW SET LIST DRAWER & EDITING LOGIC */
+/* SHOW SET LIST DRAWER & LOCAL STORAGE IMPORT/DELETE */
 
 function openShowSetListDrawer(sl) {
     closeDrawer("drawer-setlist");
@@ -2054,81 +2018,44 @@ function openShowSetListDrawer(sl) {
         contentBox.innerHTML = '<span class="empty-message">No songs in this line-up.</span>';
     }
 
-    const editBtn = document.getElementById("show-edit-btn");
-    if (editBtn) {
-        editBtn.onclick = () => {
-            closeDrawer("drawer-show-setlist");
-            openEditLineUpForm(sl);
-        };
-    }
-
     const importBtn = document.getElementById("show-import-btn");
-    if (importBtn) {
-        importBtn.onclick = () => {
-            try {
-                let localCache = JSON.parse(localStorage.getItem("localWifiSetLists") || "[]");
-                const exists = localCache.some(item => item.worshipLeader === sl.worshipLeader && item.createdAt === sl.createdAt);
-                if (!exists) {
-                    localCache.push(sl);
-                    localStorage.setItem("localWifiSetLists", JSON.stringify(localCache));
-                    alert("Successfully downloaded/imported line-up to local storage for local Wi-Fi use!");
-                } else {
-                    alert("This line-up is already imported in local storage.");
-                }
-            } catch (err) {
-                console.error(err);
-                alert("Failed to import to local storage.");
+    importBtn.onclick = () => {
+        try {
+            let localCache = JSON.parse(localStorage.getItem("localWifiSetLists") || "[]");
+            const exists = localCache.some(item => item.worshipLeader === sl.worshipLeader && item.createdAt === sl.createdAt);
+            if (!exists) {
+                localCache.push(sl);
+                localStorage.setItem("localWifiSetLists", JSON.stringify(localCache));
+                alert("Successfully downloaded/imported line-up to local storage for local Wi-Fi use!");
+            } else {
+                alert("This line-up is already imported in local storage.");
             }
-        };
-    }
+        } catch (err) {
+            console.error(err);
+            alert("Failed to import to local storage.");
+        }
+    };
 
     const deleteLocalBtn = document.getElementById("show-delete-local-btn");
-    if (deleteLocalBtn) {
-        deleteLocalBtn.onclick = () => {
-            try {
-                let localCache = JSON.parse(localStorage.getItem("localWifiSetLists") || "[]");
-                const initialLength = localCache.length;
-                localCache = localCache.filter(item => !(item.worshipLeader === sl.worshipLeader && item.createdAt === sl.createdAt));
-                
-                if (localCache.length < initialLength) {
-                    localStorage.setItem("localWifiSetLists", JSON.stringify(localCache));
-                    alert("Removed from local storage only. Firebase files remain safe!");
-                } else {
-                    alert("This line-up was not found in local storage.");
-                }
-            } catch (err) {
-                console.error(err);
-                alert("Failed to delete from local storage.");
+    deleteLocalBtn.onclick = () => {
+        try {
+            let localCache = JSON.parse(localStorage.getItem("localWifiSetLists") || "[]");
+            const initialLength = localCache.length;
+            localCache = localCache.filter(item => !(item.worshipLeader === sl.worshipLeader && item.createdAt === sl.createdAt));
+            
+            if (localCache.length < initialLength) {
+                localStorage.setItem("localWifiSetLists", JSON.stringify(localCache));
+                alert("Removed from local storage only. Firebase files remain safe!");
+            } else {
+                alert("This line-up was not found in local storage.");
             }
-        };
-    }
+        } catch (err) {
+            console.error(err);
+            alert("Failed to delete from local storage.");
+        }
+    };
 
     openDrawer("drawer-show-setlist");
-}
-
-/* OPEN EDITED LINE-UP FORM */
-
-function openEditLineUpForm(sl) {
-    editingSetListRef = sl;
-
-    const heading = document.getElementById("lineup-form-heading");
-    if (heading) heading.textContent = "Edit Line-up (" + (sl.worshipLeader || "Set List") + ")";
-
-    const wlInput = document.getElementById("new-wl-name");
-    if (wlInput) wlInput.value = sl.worshipLeader || "";
-
-    renderNewLineUpForm();
-
-    const currentLineup = sl.lineup || {};
-
-    categories.forEach((cat, index) => {
-        const select = document.getElementById("select-new-" + index);
-        if (select && currentLineup[cat]) {
-            select.value = currentLineup[cat];
-        }
-    });
-
-    openDrawer("drawer-newlineup");
 }
 
 /* LOAD SET LIST AND SHOW CATEGORIES FIRST */
@@ -2240,7 +2167,7 @@ function playLineUpSongAt(index) {
         return;
     }
 
-    playSong(title);
+    playSong(title, true);
     document.getElementById("play-song-title").textContent =
         category + " — " + title;
 }
@@ -2279,7 +2206,7 @@ function renderSongsDatabase() {
 
         name.textContent = "🎵 " + title;
         name.onclick = () => {
-            playSong(title);
+            playSong(title, true);
             closeDrawer("drawer-songs");
         };
 
@@ -2395,6 +2322,7 @@ async function saveSongFromEditor() {
         return;
     }
 
+    // 🔒 ADMIN PASSKEY CHECK
     const passkey = prompt("Enter Admin Passkey to Save:");
     if (passkey === null) return;
 
@@ -2419,7 +2347,7 @@ async function saveSongFromEditor() {
         songsDatabase[title] = content;
         alert("Song saved successfully!");
 
-        playSong(title);
+        playSong(title, true);
     } catch (err) {
         console.error(err);
         alert("Failed to save song: " + err.message);
@@ -2520,40 +2448,25 @@ async function saveNewLineUpFromForm() {
         return;
     }
 
+    const newList = {
+        worshipLeader: worshipLeader,
+        lineup: lineup,
+        createdAt: Date.now()
+    };
+
     const db = window.mobilePresenterFirebase.db;
     const ref = window.mobilePresenterFirebase.ref;
-    const set = window.mobilePresenterFirebase.set;
     const push = window.mobilePresenterFirebase.push;
 
     try {
-        if (editingSetListRef && typeof editingSetListRef.originalIndex !== "undefined") {
-            const targetIndex = editingSetListRef.originalIndex;
-            setLists[targetIndex].worshipLeader = worshipLeader;
-            setLists[targetIndex].lineup = lineup;
-            setLists[targetIndex].updatedAt = Date.now();
-
-            await set(ref(db, 'lineUpMaker/setLists'), setLists);
-            alert("Line-up updated successfully!");
-            editingSetListRef = null;
-        } else {
-            const newList = {
-                worshipLeader: worshipLeader,
-                lineup: lineup,
-                createdAt: Date.now()
-            };
-            await push(ref(db, 'lineUpMaker/setLists'), newList);
-            alert("Line-up saved successfully!");
-        }
-
-        const heading = document.getElementById("lineup-form-heading");
-        if (heading) heading.textContent = "Create New Line-up";
-
+        await push(ref(db, 'lineUpMaker/setLists'), newList);
+        alert("Line-up saved successfully!");
         wlInput.value = "";
         closeDrawer("drawer-newlineup");
         openDrawer("drawer-setlist");
     } catch (err) {
         console.error(err);
-        alert("Failed to save/update line-up: " + err.message);
+        alert("Failed to save line-up: " + err.message);
     }
 }
 
@@ -2593,7 +2506,7 @@ async function confirmSaveActiveLineUp() {
 
 /* PLAY SONG */
 
-function playSong(title) {
+function playSong(title, shouldBroadcast = true) {
     if (!(title in songsDatabase)) {
         return alert("Song not found.");
     }
@@ -2609,66 +2522,30 @@ function playSong(title) {
     };
 
     lineColorsDirty = false;
-    currentSectionIndex = 0;
 
     document.getElementById("play-song-title").textContent = title;
 
     renderPlayScreen();
     switchView("play");
 
-    // Automatically broadcast live sync when playing a song
-    broadcastLiveSync();
+    if (shouldBroadcast) {
+        broadcastLiveSession(title, 0);
+    }
 }
 
-/* AUTOMATIC LIVE SYNC LISTENER (RECEIVES JUMPER, SCROLL & EDITED CONTENT) */
+/* RECEIVE LIVE COMMANDS (INCOMING SYNC LISTENERS) */
 
 function handleIncomingLiveSync(liveData) {
     if (!liveData || !liveData.title) return;
 
-    let contentChanged = false;
-    if (liveData.content && liveData.content !== currentPlayingSong.content) {
-        currentPlayingSong.content = liveData.content;
-        contentChanged = true;
-    }
-
-    if (liveData.title !== currentPlayingSong.title || contentChanged) {
-        if (songsDatabase[liveData.title] || liveData.content) {
-            if (liveData.content) {
-                songsDatabase[liveData.title] = liveData.content;
-            }
-            currentPlayingSong = {
-                title: liveData.title,
-                content: songsDatabase[liveData.title],
-                fontSize: getSongFontSize(liveData.title)
-            };
-            if (document.getElementById("view-play").classList.contains("active")) {
-                renderPlayScreen();
-                document.getElementById("play-song-title").textContent = liveData.title;
-            }
+    if (liveData.title !== currentPlayingSong.title) {
+        if (songsDatabase[liveData.title]) {
+            playSong(liveData.title, false);
         }
     }
 
-    if (document.getElementById("view-play").classList.contains("active")) {
-        isProgrammaticScroll = true; // Block echo loop
-
-        if (typeof liveData.sectionIndex === 'number') {
-            jumpToSongSection(liveData.sectionIndex);
-        }
-
-        if (typeof liveData.scrollPercent === 'number') {
-            const box = document.getElementById("play-lyrics-box");
-            if (box) {
-                const targetScroll = liveData.scrollPercent * (box.scrollHeight - box.clientHeight);
-                box.scrollTo({
-                    top: targetScroll,
-                    behavior: 'smooth'
-                });
-            }
-        }
-
-        setTimeout(() => {
-            isProgrammaticScroll = false;
-        }, 300);
+    if (typeof liveData.sectionIndex === 'number' && document.getElementById("view-play").classList.contains("active")) {
+        jumpToSongSection(liveData.sectionIndex, false);
     }
 }
 
@@ -2734,10 +2611,12 @@ async function confirmAddCategory() {
 /* INITIALIZE */
 
 document.addEventListener("DOMContentLoaded", () => {
+    // Check if opened via Read-Only QR Code Viewer link
     const urlParams = new URLSearchParams(window.location.search);
     const isReadOnlyViewer = urlParams.get("view") === "readonly";
 
     if (isReadOnlyViewer) {
+        // Hide operator toolbar tools and edit buttons for viewers
         const toolbar = document.querySelector(".toolbar-tools");
         if (toolbar) toolbar.style.display = "none";
 
@@ -2747,6 +2626,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const brandTitle = document.querySelector(".brand-title");
         if (brandTitle) brandTitle.textContent = "Line-up Maker (Viewer)";
 
+        // Jump straight to play screen for viewers
         switchView("play", false);
     }
 
@@ -2760,12 +2640,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     installBrowserBackGuard();
 
+    // Listen via BroadcastChannel (Offline Local Network)
     if (localLiveChannel) {
         localLiveChannel.onmessage = (event) => {
             handleIncomingLiveSync(event.data);
         };
     }
 
+    // Listen via Storage Events (Offline Fallback for same origin)
     window.addEventListener("storage", (event) => {
         if (event.key === "lineUpMaker_liveSession" && event.newValue) {
             try {

@@ -824,9 +824,10 @@ header {
     <div class="drawer-panel" onclick="event.stopPropagation()">
         <h3 id="show-setlist-title" style="color:var(--section);font-size:0.95rem;">Set List Details</h3>
         <div id="show-setlist-content" style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;color:var(--text-muted);font-size:0.8rem;"></div>
-        <div style="display:flex;gap:8px;margin-top:5px;">
-            <button class="btn btn-primary" style="flex:1;" id="show-import-btn">📥 Import to Local</button>
-            <button class="btn btn-danger" style="flex:1;" id="show-delete-local-btn">🗑️ Delete Local</button>
+        <div style="display:flex;gap:5px;margin-top:5px;flex-wrap:wrap;">
+            <button class="btn btn-sm btn-primary" style="flex:1;" id="show-edit-btn">✏️ Edit Line-up</button>
+            <button class="btn btn-sm" style="flex:1;background:#38bdf8;color:#0f172a;font-weight:bold;" id="show-import-btn">📥 Import</button>
+            <button class="btn btn-sm btn-danger" style="flex:1;" id="show-delete-local-btn">🗑️ Delete</button>
         </div>
         <button class="btn" onclick="closeDrawer('drawer-show-setlist')" style="margin-top:4px;">Close</button>
     </div>
@@ -843,10 +844,10 @@ header {
     </div>
 </div>
 
-<!-- NEW LINEUP -->
+<!-- NEW / EDIT LINEUP -->
 <div id="drawer-newlineup" class="drawer-overlay" onclick="closeDrawer('drawer-newlineup')">
     <div class="drawer-panel" onclick="event.stopPropagation()">
-        <h3 style="color:var(--highlight);font-size:0.95rem;">Create New Line-up</h3>
+        <h3 style="color:var(--highlight);font-size:0.95rem;" id="lineup-form-heading">Create New Line-up</h3>
         <input type="text" id="new-wl-name" placeholder="Worship Leader Name..."
             style="background:#0f172a;border:1px solid #334155;color:#fff;padding:8px;border-radius:6px;">
         <div id="new-lineup-selectors" style="max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;"></div>
@@ -933,6 +934,9 @@ let songKeys = {};
 let songTitles = {};
 let setLists = [];
 
+/* EDIT SET LIST REFERENCE */
+let editingSetListRef = null;
+
 /* ZOOM */
 
 let songZoomLevels = {};
@@ -971,13 +975,21 @@ let lineColorsDirty = false;
 const notesSharp = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const notesFlat = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
 
+/* MANUAL PUSH SYNC CONTROLLER */
+
+let currentSectionIndex = 0;
+
+const localLiveChannel = typeof BroadcastChannel !== "undefined" 
+    ? new BroadcastChannel("lineup_maker_live_sync") 
+    : null;
+
 function manualPushSync() {
     if (!currentPlayingSong || !currentPlayingSong.title) {
         alert("No song currently active to push.");
         return;
     }
 
-    // Kuhanin ang scroll position sa lyrics box (0.0 to 1.0 percentage)
+    // Capture exact scroll percentage
     const box = document.getElementById("play-lyrics-box");
     let scrollPercent = 0;
     if (box && box.scrollHeight > box.clientHeight) {
@@ -987,7 +999,7 @@ function manualPushSync() {
     const payload = {
         title: currentPlayingSong.title,
         sectionIndex: currentSectionIndex,
-        scrollPercent: scrollPercent, // Pinasok ang scroll position
+        scrollPercent: scrollPercent,
         timestamp: Date.now()
     };
 
@@ -1740,7 +1752,6 @@ function detectSongSections(content) {
     if (!content) return [];
     const sections = [];
 
-    // Detects Intro, Verse (1, 2, 3), Pre, Pre-Chorus, Chorus (1, 2, 3), Bridge, Instrumental, and Outro
     const markerPattern =
         /^[ \t]*\[(Intro|Verse(?:[ \t]*\d+)?|Pre-?Chorus|Pre|Chorus(?:[ \t]*\d+)?|Bridge|Instrumental|Outro)\][ \t]*$/gim;
 
@@ -1984,7 +1995,7 @@ function renderSetList() {
     });
 }
 
-/* SHOW SET LIST DRAWER & LOCAL STORAGE IMPORT/DELETE */
+/* SHOW SET LIST DRAWER & EDITING LOGIC */
 
 function openShowSetListDrawer(sl) {
     closeDrawer("drawer-setlist");
@@ -2004,6 +2015,15 @@ function openShowSetListDrawer(sl) {
         }
     } else {
         contentBox.innerHTML = '<span class="empty-message">No songs in this line-up.</span>';
+    }
+
+    // EDIT LINE-UP BUTTON HANDLER
+    const editBtn = document.getElementById("show-edit-btn");
+    if (editBtn) {
+        editBtn.onclick = () => {
+            closeDrawer("drawer-show-setlist");
+            openEditLineUpForm(sl);
+        };
     }
 
     const importBtn = document.getElementById("show-import-btn");
@@ -2044,6 +2064,31 @@ function openShowSetListDrawer(sl) {
     };
 
     openDrawer("drawer-show-setlist");
+}
+
+/* OPEN & SAVE EDITED LINE-UP */
+
+function openEditLineUpForm(sl) {
+    editingSetListRef = sl;
+
+    const heading = document.getElementById("lineup-form-heading");
+    if (heading) heading.textContent = "Edit Line-up (" + (sl.worshipLeader || "Set List") + ")";
+
+    const wlInput = document.getElementById("new-wl-name");
+    if (wlInput) wlInput.value = sl.worshipLeader || "";
+
+    renderNewLineUpForm();
+
+    const currentLineup = sl.lineup || {};
+
+    categories.forEach((cat, index) => {
+        const select = document.getElementById("select-new-" + index);
+        if (select && currentLineup[cat]) {
+            select.value = currentLineup[cat];
+        }
+    });
+
+    openDrawer("drawer-newlineup");
 }
 
 /* LOAD SET LIST AND SHOW CATEGORIES FIRST */
@@ -2436,25 +2481,40 @@ async function saveNewLineUpFromForm() {
         return;
     }
 
-    const newList = {
-        worshipLeader: worshipLeader,
-        lineup: lineup,
-        createdAt: Date.now()
-    };
-
     const db = window.mobilePresenterFirebase.db;
     const ref = window.mobilePresenterFirebase.ref;
+    const set = window.mobilePresenterFirebase.set;
     const push = window.mobilePresenterFirebase.push;
 
     try {
-        await push(ref(db, 'lineUpMaker/setLists'), newList);
-        alert("Line-up saved successfully!");
+        if (editingSetListRef && typeof editingSetListRef.originalIndex !== "undefined") {
+            const targetIndex = editingSetListRef.originalIndex;
+            setLists[targetIndex].worshipLeader = worshipLeader;
+            setLists[targetIndex].lineup = lineup;
+            setLists[targetIndex].updatedAt = Date.now();
+
+            await set(ref(db, 'lineUpMaker/setLists'), setLists);
+            alert("Line-up updated successfully!");
+            editingSetListRef = null;
+        } else {
+            const newList = {
+                worshipLeader: worshipLeader,
+                lineup: lineup,
+                createdAt: Date.now()
+            };
+            await push(ref(db, 'lineUpMaker/setLists'), newList);
+            alert("Line-up saved successfully!");
+        }
+
+        const heading = document.getElementById("lineup-form-heading");
+        if (heading) heading.textContent = "Create New Line-up";
+
         wlInput.value = "";
         closeDrawer("drawer-newlineup");
         openDrawer("drawer-setlist");
     } catch (err) {
         console.error(err);
-        alert("Failed to save line-up: " + err.message);
+        alert("Failed to save/update line-up: " + err.message);
     }
 }
 
@@ -2510,7 +2570,7 @@ function playSong(title) {
     };
 
     lineColorsDirty = false;
-    currentSectionIndex = 0; // Reset section pointer
+    currentSectionIndex = 0;
 
     document.getElementById("play-song-title").textContent = title;
 
@@ -2530,12 +2590,10 @@ function handleIncomingLiveSync(liveData) {
     }
 
     if (document.getElementById("view-play").classList.contains("active")) {
-        // 1. Sync Jumper Section Tag
         if (typeof liveData.sectionIndex === 'number') {
             jumpToSongSection(liveData.sectionIndex);
         }
 
-        // 2. Sync Smooth Scroll Position
         if (typeof liveData.scrollPercent === 'number') {
             const box = document.getElementById("play-lyrics-box");
             if (box) {
@@ -2548,7 +2606,6 @@ function handleIncomingLiveSync(liveData) {
         }
     }
 }
-
 
 /* QR */
 
@@ -2612,12 +2669,10 @@ async function confirmAddCategory() {
 /* INITIALIZE */
 
 document.addEventListener("DOMContentLoaded", () => {
-    // Check if opened via Read-Only QR Code Viewer link
     const urlParams = new URLSearchParams(window.location.search);
     const isReadOnlyViewer = urlParams.get("view") === "readonly";
 
     if (isReadOnlyViewer) {
-        // Hide operator toolbar tools and edit buttons for viewers
         const toolbar = document.querySelector(".toolbar-tools");
         if (toolbar) toolbar.style.display = "none";
 
@@ -2627,7 +2682,6 @@ document.addEventListener("DOMContentLoaded", () => {
         const brandTitle = document.querySelector(".brand-title");
         if (brandTitle) brandTitle.textContent = "Line-up Maker (Viewer)";
 
-        // Jump straight to play screen for viewers
         switchView("play", false);
     }
 
@@ -2641,14 +2695,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     installBrowserBackGuard();
 
-    // Listen via BroadcastChannel (Offline Local Network)
     if (localLiveChannel) {
         localLiveChannel.onmessage = (event) => {
             handleIncomingLiveSync(event.data);
         };
     }
 
-    // Listen via Storage Events (Offline Fallback for same origin)
     window.addEventListener("storage", (event) => {
         if (event.key === "lineUpMaker_liveSession" && event.newValue) {
             try {

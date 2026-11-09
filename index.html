@@ -824,11 +824,14 @@ header {
     <div class="drawer-panel" onclick="event.stopPropagation()">
         <h3 id="show-setlist-title" style="color:var(--section);font-size:0.95rem;">Set List Details</h3>
         <div id="show-setlist-content" style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;color:var(--text-muted);font-size:0.8rem;"></div>
+        
+        <!-- EDIT BUTTON IS INCLUDED HERE -->
         <div style="display:flex;gap:5px;margin-top:5px;flex-wrap:wrap;">
             <button class="btn btn-sm btn-primary" style="flex:1;" id="show-edit-btn">✏️ Edit Line-up</button>
             <button class="btn btn-sm" style="flex:1;background:#38bdf8;color:#0f172a;font-weight:bold;" id="show-import-btn">📥 Import</button>
             <button class="btn btn-sm btn-danger" style="flex:1;" id="show-delete-local-btn">🗑️ Delete</button>
         </div>
+        
         <button class="btn" onclick="closeDrawer('drawer-show-setlist')" style="margin-top:4px;">Close</button>
     </div>
 </div>
@@ -989,7 +992,6 @@ function manualPushSync() {
         return;
     }
 
-    // Capture exact scroll percentage
     const box = document.getElementById("play-lyrics-box");
     let scrollPercent = 0;
     if (box && box.scrollHeight > box.clientHeight) {
@@ -1003,7 +1005,6 @@ function manualPushSync() {
         timestamp: Date.now()
     };
 
-    // 1. Local Wi-Fi / Offline Broadcast
     try {
         localStorage.setItem("lineUpMaker_liveSession", JSON.stringify(payload));
         if (localLiveChannel) {
@@ -1013,7 +1014,6 @@ function manualPushSync() {
         console.error("Local sync error:", err);
     }
 
-    // 2. Firebase Cloud Broadcast (Online)
     if (window.mobilePresenterFirebase && navigator.onLine) {
         const db = window.mobilePresenterFirebase.db;
         const ref = window.mobilePresenterFirebase.ref;
@@ -1041,14 +1041,12 @@ function initializeCloudSync() {
     const ref = window.mobilePresenterFirebase.ref;
     const onValue = window.mobilePresenterFirebase.onValue;
 
-    // Sync Songs Database
     onValue(ref(db, 'lineUpMaker/songsDatabase'), (snapshot) => {
         songsDatabase = snapshot.val() || {};
         renderSongsDatabase();
         renderNewLineUpForm();
     });
 
-    // Sync Set Lists
     onValue(ref(db, 'lineUpMaker/setLists'), (snapshot) => {
         const val = snapshot.val();
         if (val) {
@@ -1059,7 +1057,6 @@ function initializeCloudSync() {
         renderSetList();
     });
 
-    // Sync Categories
     onValue(ref(db, 'lineUpMaker/categories'), (snapshot) => {
         const val = snapshot.val();
         if (val) {
@@ -1068,7 +1065,6 @@ function initializeCloudSync() {
         renderNewLineUpForm();
     });
 
-    // Sync Zoom Levels & Line Colors
     onValue(ref(db, 'lineUpMaker/songZoomLevels'), (snapshot) => {
         songZoomLevels = snapshot.val() || {};
     });
@@ -1077,7 +1073,6 @@ function initializeCloudSync() {
         songLineColors = snapshot.val() || {};
     });
 
-    // Sync Online Live Session
     onValue(ref(db, 'lineUpMaker/liveSession'), (snapshot) => {
         const liveData = snapshot.val();
         if (liveData) {
@@ -1774,7 +1769,7 @@ function jumpToSongSection(index) {
 
     if (!box || !jumper) return;
 
-    currentSectionIndex = index; // Save current index for manual push
+    currentSectionIndex = index;
 
     const blocks = box.querySelectorAll(".jumper-section-block");
     const buttons = jumper.querySelectorAll(".jumper-chip");
@@ -2355,7 +2350,6 @@ async function saveSongFromEditor() {
         return;
     }
 
-    // 🔒 ADMIN PASSKEY CHECK
     const passkey = prompt("Enter Admin Passkey to Save:");
     if (passkey === null) return;
 

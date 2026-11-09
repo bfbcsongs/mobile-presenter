@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lineup-maker-v2'; // Bump this version on changes
+const CACHE_NAME = 'lineup-maker-v3'; // Bump this version on changes
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',

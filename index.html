@@ -1168,16 +1168,30 @@ function switchView(viewName, pushHistory = true) {
 function goBack(fromSystemBack = false) {
     closeLineColorTool();
 
+    // 🎯 FIX: Kung ang nakasalang sa screen ay Play View at may Categories modal, ibalik sa Category picker!
+    const playView = document.getElementById("view-play");
+    const categoryModal = document.getElementById("category-picker-modal");
+    
+    if (playView && playView.classList.contains("active") && categoryModal) {
+        switchView("home", false);
+        categoryModal.style.display = "flex";
+        return;
+    }
+
     if (viewHistory.length > 1) {
         viewHistory.pop();
         switchView(viewHistory[viewHistory.length - 1], false);
         return;
     }
 
-    const confirmed = window.confirm("Are you sure you want to leave BFBC LINE-UP?");
+    const confirmed = window.confirm(
+        "Are you sure you want to leave BFBC LINE-UP?"
+    );
+
     if (!confirmed) return;
 
     allowBrowserExit = true;
+
     if (fromSystemBack) {
         window.history.back();
     } else {

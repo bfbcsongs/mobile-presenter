@@ -1056,7 +1056,13 @@ function initializeCloudSync() {
 
     // Sync Songs Database
     onValue(ref(db, 'lineUpMaker/songsDatabase'), (snapshot) => {
-        songsDatabase = snapshot.val() || {};
+        const cloudSongs = snapshot.val() || {};
+        // Merge cloud data into local memory/storage
+        songsDatabase = { ...cloudSongs, ...songsDatabase };
+        try {
+            localStorage.setItem("offline_cached_songs", JSON.stringify(songsDatabase));
+        } catch (e) {}
+
         renderSongsDatabase();
         renderNewLineUpForm();
     });
@@ -1069,6 +1075,10 @@ function initializeCloudSync() {
         } else {
             setLists = [];
         }
+        try {
+            localStorage.setItem("localWifiSetLists", JSON.stringify(setLists));
+        } catch (e) {}
+
         renderSetList();
     });
 
@@ -1087,7 +1097,11 @@ function initializeCloudSync() {
     });
 
     onValue(ref(db, 'lineUpMaker/songLineColors'), (snapshot) => {
-        songLineColors = snapshot.val() || {};
+        const cloudColors = snapshot.val() || {};
+        songLineColors = { ...cloudColors, ...songLineColors };
+        try {
+            localStorage.setItem("offline_cached_colors", JSON.stringify(songLineColors));
+        } catch (e) {}
     });
 
     // Sync Online Live Session
@@ -1173,7 +1187,9 @@ function changeEditorZoom(amount) {
         const db = window.mobilePresenterFirebase.db;
         const ref = window.mobilePresenterFirebase.ref;
         const set = window.mobilePresenterFirebase.set;
-        set(ref(db, 'lineUpMaker/songZoomLevels/' + key), currentSongFontSize);
+        if (navigator.onLine && db) {
+            set(ref(db, 'lineUpMaker/songZoomLevels/' + key), currentSongFontSize);
+        }
     }
 }
 
@@ -1994,16 +2010,31 @@ function renderSetList() {
         del.textContent = "Delete";
 
         del.onclick = async () => {
-            // 🔒 REQUIRE PASSKEY FOR DELETING SETLIST
-            if (!checkAdminPasskey("Delete Set List")) return;
+            // MODAL 1: LOCAL CONFIRMATION
+            if (!confirm("Delete this set list from your Device Local Storage?")) return;
 
-            if (confirm("Delete this set list from Firebase?")) {
-                const db = window.mobilePresenterFirebase.db;
-                const ref = window.mobilePresenterFirebase.ref;
-                const set = window.mobilePresenterFirebase.set;
-                
-                setLists.splice(sl.originalIndex, 1);
-                await set(ref(db, 'lineUpMaker/setLists'), setLists);
+            setLists.splice(sl.originalIndex, 1);
+            try {
+                localStorage.setItem("localWifiSetLists", JSON.stringify(setLists));
+            } catch (e) {}
+            renderSetList();
+            alert("Deleted from Local Storage.");
+
+            // MODAL 2: FIREBASE CLOUD DELETION (Requires Passkey)
+            if (navigator.onLine && window.mobilePresenterFirebase) {
+                if (confirm("Do you also want to delete this set list from Firebase Cloud?")) {
+                    if (checkAdminPasskey("Delete Set List from Firebase")) {
+                        const db = window.mobilePresenterFirebase.db;
+                        const ref = window.mobilePresenterFirebase.ref;
+                        const set = window.mobilePresenterFirebase.set;
+                        try {
+                            await set(ref(db, 'lineUpMaker/setLists'), setLists);
+                            alert("Deleted from Firebase Cloud.");
+                        } catch (err) {
+                            console.error("Cloud deletion failed:", err);
+                        }
+                    }
+                }
             }
         };
 
@@ -2043,9 +2074,9 @@ function openShowSetListDrawer(sl) {
             if (!exists) {
                 localCache.push(sl);
                 localStorage.setItem("localWifiSetLists", JSON.stringify(localCache));
-                alert("Successfully downloaded/imported line-up to local storage for local Wi-Fi use!");
+                alert("Successfully downloaded/imported line-up to local storage!");
             } else {
-                alert("This line-up is already imported in local storage.");
+                alert("This line-up is already in local storage.");
             }
         } catch (err) {
             console.error(err);
@@ -2055,30 +2086,22 @@ function openShowSetListDrawer(sl) {
 
     const deleteLocalBtn = document.getElementById("show-delete-local-btn");
     deleteLocalBtn.onclick = () => {
-        // 🔒 REQUIRE PASSKEY FOR DELETING LOCAL SETLIST
-        if (!checkAdminPasskey("Delete Local Set List")) return;
-
+        if (!confirm("Remove this set list from local storage?")) return;
         try {
             let localCache = JSON.parse(localStorage.getItem("localWifiSetLists") || "[]");
-            const initialLength = localCache.length;
             localCache = localCache.filter(item => !(item.worshipLeader === sl.worshipLeader && item.createdAt === sl.createdAt));
-            
-            if (localCache.length < initialLength) {
-                localStorage.setItem("localWifiSetLists", JSON.stringify(localCache));
-                alert("Removed from local storage only. Firebase files remain safe!");
-            } else {
-                alert("This line-up was not found in local storage.");
-            }
+            localStorage.setItem("localWifiSetLists", JSON.stringify(localCache));
+            alert("Removed from local storage.");
+            openDrawer("drawer-setlist");
         } catch (err) {
             console.error(err);
-            alert("Failed to delete from local storage.");
         }
     };
 
     openDrawer("drawer-show-setlist");
 }
 
-/* LOAD SET LIST AND SHOW CATEGORIES FIRST */
+/* LOAD SET LIST AND AUTO-DOWNLOAD SONGS TO LOCAL */
 
 function confirmLoadSetList() {
     if (pendingSetListIndex === null) return;
@@ -2093,6 +2116,37 @@ function confirmLoadSetList() {
     }
 
     activeLineUp = { ...sl.lineup };
+
+    // 📦 AUTO-DOWNLOAD SETLIST & SONGS TO LOCAL STORAGE FOR OFFLINE / HOTSPOT USE
+    try {
+        let localSetLists = JSON.parse(localStorage.getItem("localWifiSetLists") || "[]");
+        const exists = localSetLists.some(item => item.worshipLeader === sl.worshipLeader && item.createdAt === sl.createdAt);
+        if (!exists) {
+            localSetLists.push(sl);
+            localStorage.setItem("localWifiSetLists", JSON.stringify(localSetLists));
+        }
+
+        const cachedSongs = JSON.parse(localStorage.getItem("offline_cached_songs") || "{}");
+        const cachedColors = JSON.parse(localStorage.getItem("offline_cached_colors") || "{}");
+
+        for (const [cat, songTitle] of Object.entries(activeLineUp)) {
+            if (songTitle && songsDatabase[songTitle]) {
+                cachedSongs[songTitle] = songsDatabase[songTitle];
+                const key = getSongKey(songTitle);
+                if (songLineColors[key]) {
+                    cachedColors[key] = songLineColors[key];
+                }
+            }
+        }
+
+        localStorage.setItem("offline_cached_songs", JSON.stringify(cachedSongs));
+        localStorage.setItem("offline_cached_colors", JSON.stringify(cachedColors));
+        localStorage.setItem("active_loaded_lineup", JSON.stringify(activeLineUp));
+        
+        console.info("Line-up and associated songs successfully auto-cached locally.");
+    } catch (err) {
+        console.warn("Auto local caching error:", err);
+    }
 
     closeModal("confirm-lineup-modal");
     pendingSetListIndex = null;
@@ -2325,7 +2379,7 @@ function openPlayToEdit() {
     document.getElementById("editor-textarea").focus();
 }
 
-/* SAVE NEW OR EDITED SONG */
+/* SAVE NEW OR EDITED SONG (LOCAL-FIRST) */
 
 async function saveSongFromEditor() {
     const editor = document.getElementById("editor-textarea");
@@ -2342,61 +2396,89 @@ async function saveSongFromEditor() {
         return;
     }
 
-    // 🔒 REQUIRE PASSKEY ONLY WHEN SAVING EDITS TO AN EXISTING SONG
-    if (!isNewSongDraft) {
-        if (!checkAdminPasskey("Save Song Edits")) return;
+    // 1. LOCAL-FIRST SAVE (Always saves immediately to device local storage)
+    songsDatabase[title] = content;
+    const key = getSongKey(title);
+    if (lineColorsDirty) {
+        songLineColors[key] = currentLineColors;
     }
-
-    const db = window.mobilePresenterFirebase.db;
-    const ref = window.mobilePresenterFirebase.ref;
-    const set = window.mobilePresenterFirebase.set;
 
     try {
-        await set(ref(db, 'lineUpMaker/songsDatabase/' + title), content);
+        localStorage.setItem("offline_cached_songs", JSON.stringify(songsDatabase));
+        localStorage.setItem("offline_cached_colors", JSON.stringify(songLineColors));
+    } catch (err) {
+        console.warn("Local storage save failed:", err);
+    }
 
-        if (lineColorsDirty) {
-            const key = getSongKey(title);
-            songLineColors[key] = currentLineColors;
-            await set(ref(db, 'lineUpMaker/songLineColors/' + key), currentLineColors);
+    alert("Saved to Local Storage successfully!");
+
+    // 2. FIREBASE CLOUD SYNC (Optional Passkey if editing an existing song)
+    if (navigator.onLine && window.mobilePresenterFirebase) {
+        let shouldSyncCloud = true;
+
+        if (!isNewSongDraft) {
+            // Require passkey only when syncing edits to cloud
+            shouldSyncCloud = checkAdminPasskey("Sync Edit to Firebase Cloud");
         }
 
-        songsDatabase[title] = content;
-        alert("Song saved successfully!");
+        if (shouldSyncCloud) {
+            const db = window.mobilePresenterFirebase.db;
+            const ref = window.mobilePresenterFirebase.ref;
+            const set = window.mobilePresenterFirebase.set;
 
-        playSong(title, true);
-    } catch (err) {
-        console.error(err);
-        alert("Failed to save song: " + err.message);
+            try {
+                await set(ref(db, 'lineUpMaker/songsDatabase/' + title), content);
+                if (lineColorsDirty) {
+                    await set(ref(db, 'lineUpMaker/songLineColors/' + key), currentLineColors);
+                }
+                console.info("Successfully synced to Firebase Cloud.");
+            } catch (err) {
+                console.warn("Cloud sync failed, local copy remains safe:", err);
+            }
+        }
     }
+
+    playSong(title, true);
 }
 window.saveSongFromEditor = saveSongFromEditor;
 
-/* DELETE SONG */
+/* DELETE SONG (DUAL MODAL: LOCAL YES/NO + FIREBASE PASSKEY) */
 
 async function deleteCurrentSong() {
     const title = currentPlayingSong.title;
     if (!title) return;
 
-    // 🔒 REQUIRE PASSKEY FOR DELETING SONG
-    if (!checkAdminPasskey("Delete Song")) return;
+    // MODAL 1: LOCAL CONFIRMATION (Yes / No)
+    if (!confirm(`Delete "${title}" from your Device Local Storage?`)) return;
 
-    if (!confirm(`Are you sure you want to delete "${title}"?`)) return;
-
-    const db = window.mobilePresenterFirebase.db;
-    const ref = window.mobilePresenterFirebase.ref;
-    const remove = window.mobilePresenterFirebase.remove;
-
+    delete songsDatabase[title];
     try {
-        await remove(ref(db, 'lineUpMaker/songsDatabase/' + title));
-        delete songsDatabase[title];
-        alert("Song deleted.");
-        switchView("home");
-        renderSongsDatabase();
-        renderNewLineUpForm();
-    } catch (err) {
-        console.error(err);
-        alert("Failed to delete song: " + err.message);
+        localStorage.setItem("offline_cached_songs", JSON.stringify(songsDatabase));
+    } catch (e) {}
+
+    alert("Deleted from Local Storage.");
+
+    // MODAL 2: FIREBASE CLOUD DELETION (Requires Passkey)
+    if (navigator.onLine && window.mobilePresenterFirebase) {
+        if (confirm(`Do you also want to delete "${title}" from Firebase Cloud?`)) {
+            if (checkAdminPasskey("Delete from Firebase Cloud")) {
+                const db = window.mobilePresenterFirebase.db;
+                const ref = window.mobilePresenterFirebase.ref;
+                const remove = window.mobilePresenterFirebase.remove;
+
+                try {
+                    await remove(ref(db, 'lineUpMaker/songsDatabase/' + title));
+                    alert("Deleted from Firebase Cloud.");
+                } catch (err) {
+                    console.error("Cloud deletion failed:", err);
+                }
+            }
+        }
     }
+
+    switchView("home");
+    renderSongsDatabase();
+    renderNewLineUpForm();
 }
 
 /* LINE-UP FORM */
@@ -2473,20 +2555,31 @@ async function saveNewLineUpFromForm() {
         createdAt: Date.now()
     };
 
-    const db = window.mobilePresenterFirebase.db;
-    const ref = window.mobilePresenterFirebase.ref;
-    const push = window.mobilePresenterFirebase.push;
-
-    // 🔓 NO PASSKEY REQUIRED FOR SAVING NEW LINE-UP
+    // 1. LOCAL-FIRST SAVE FOR LINEUPS
     try {
-        await push(ref(db, 'lineUpMaker/setLists'), newList);
-        alert("Line-up saved successfully!");
-        wlInput.value = "";
-        closeDrawer("drawer-newlineup");
-        openDrawer("drawer-setlist");
-    } catch (err) {
-        console.error(err);
-        alert("Failed to save line-up: " + err.message);
+        let localSetLists = JSON.parse(localStorage.getItem("localWifiSetLists") || "[]");
+        localSetLists.push(newList);
+        localStorage.setItem("localWifiSetLists", JSON.stringify(localSetLists));
+        setLists = localSetLists;
+        renderSetList();
+    } catch (e) {}
+
+    alert("Line-up saved to Local Storage!");
+    wlInput.value = "";
+    closeDrawer("drawer-newlineup");
+    openDrawer("drawer-setlist");
+
+    // 2. FIREBASE CLOUD SYNC (No Passkey required for new line-up)
+    if (navigator.onLine && window.mobilePresenterFirebase) {
+        const db = window.mobilePresenterFirebase.db;
+        const ref = window.mobilePresenterFirebase.ref;
+        const push = window.mobilePresenterFirebase.push;
+
+        try {
+            await push(ref(db, 'lineUpMaker/setLists'), newList);
+        } catch (err) {
+            console.warn("Cloud line-up sync failed:", err);
+        }
     }
 }
 
@@ -2509,38 +2602,60 @@ async function confirmSaveActiveLineUp() {
         createdAt: Date.now()
     };
 
-    const db = window.mobilePresenterFirebase.db;
-    const ref = window.mobilePresenterFirebase.ref;
-    const push = window.mobilePresenterFirebase.push;
-
     try {
-        await push(ref(db, 'lineUpMaker/setLists'), newList);
-        alert("Active line-up saved!");
-        closeModal("save-lineup-modal");
-        wlInput.value = "";
-    } catch (err) {
-        console.error(err);
-        alert("Failed to save: " + err.message);
+        let localSetLists = JSON.parse(localStorage.getItem("localWifiSetLists") || "[]");
+        localSetLists.push(newList);
+        localStorage.setItem("localWifiSetLists", JSON.stringify(localSetLists));
+    } catch (e) {}
+
+    alert("Active line-up saved locally!");
+    closeModal("save-lineup-modal");
+    wlInput.value = "";
+
+    if (navigator.onLine && window.mobilePresenterFirebase) {
+        const db = window.mobilePresenterFirebase.db;
+        const ref = window.mobilePresenterFirebase.ref;
+        const push = window.mobilePresenterFirebase.push;
+        try {
+            await push(ref(db, 'lineUpMaker/setLists'), newList);
+        } catch (err) {}
     }
 }
 
-/* PLAY SONG */
+/* PLAY SONG (LOCAL FALLBACK SUPPORTED) */
 
 function playSong(title, shouldBroadcast = true) {
-    if (!(title in songsDatabase)) {
-        return alert("Song not found.");
+    let songContent = songsDatabase[title];
+
+    if (!songContent) {
+        try {
+            const cachedSongs = JSON.parse(localStorage.getItem("offline_cached_songs") || "{}");
+            songContent = cachedSongs[title];
+        } catch (e) {}
+    }
+
+    if (!songContent) {
+        return alert("Song not found online or in local storage: " + title);
+    }
+
+    const key = getSongKey(title);
+    let lineColors = songLineColors[key];
+    if (!lineColors) {
+        try {
+            const cachedColors = JSON.parse(localStorage.getItem("offline_cached_colors") || "{}");
+            lineColors = cachedColors[key] || {};
+        } catch (e) {
+            lineColors = {};
+        }
     }
 
     currentPlayingSong = {
         title: title,
-        content: songsDatabase[title],
+        content: songContent,
         fontSize: getSongFontSize(title)
     };
 
-    currentLineColors = {
-        ...(songLineColors[getSongKey(title)] || {})
-    };
-
+    currentLineColors = { ...lineColors };
     lineColorsDirty = false;
 
     document.getElementById("play-song-title").textContent = title;
@@ -2559,9 +2674,7 @@ function handleIncomingLiveSync(liveData) {
     if (!liveData || !liveData.title) return;
 
     if (liveData.title !== currentPlayingSong.title) {
-        if (songsDatabase[liveData.title]) {
-            playSong(liveData.title, false);
-        }
+        playSong(liveData.title, false);
     }
 
     if (typeof liveData.sectionIndex === 'number' && document.getElementById("view-play").classList.contains("active")) {
@@ -2615,28 +2728,45 @@ async function confirmAddCategory() {
     input.value = "";
     closeModal("add-cat-modal");
 
-    const db = window.mobilePresenterFirebase.db;
-    const ref = window.mobilePresenterFirebase.ref;
-    const set = window.mobilePresenterFirebase.set;
-
     try {
-        await set(ref(db, 'lineUpMaker/categories'), categories);
-        renderNewLineUpForm();
-    } catch (err) {
-        console.error(err);
-        alert("Failed to add category: " + err.message);
+        localStorage.setItem("offline_cached_categories", JSON.stringify(categories));
+    } catch (e) {}
+
+    renderNewLineUpForm();
+
+    if (navigator.onLine && window.mobilePresenterFirebase) {
+        const db = window.mobilePresenterFirebase.db;
+        const ref = window.mobilePresenterFirebase.ref;
+        const set = window.mobilePresenterFirebase.set;
+        try {
+            await set(ref(db, 'lineUpMaker/categories'), categories);
+        } catch (err) {}
     }
 }
 
 /* INITIALIZE */
 
 document.addEventListener("DOMContentLoaded", () => {
+    // 📂 LOAD LOCAL STORAGE FIRST ON BOOT (Local-First Architecture)
+    try {
+        const localSongs = JSON.parse(localStorage.getItem("offline_cached_songs") || "{}");
+        const localColors = JSON.parse(localStorage.getItem("offline_cached_colors") || "{}");
+        const localSetLists = JSON.parse(localStorage.getItem("localWifiSetLists") || "[]");
+        const localCats = JSON.parse(localStorage.getItem("offline_cached_categories") || "[]");
+
+        if (Object.keys(localSongs).length > 0) songsDatabase = localSongs;
+        if (Object.keys(localColors).length > 0) songLineColors = localColors;
+        if (localSetLists.length > 0) setLists = localSetLists;
+        if (localCats.length > 0) categories = localCats;
+    } catch (e) {
+        console.warn("Could not read local cache on startup:", e);
+    }
+
     // Check if opened via Read-Only QR Code Viewer link
     const urlParams = new URLSearchParams(window.location.search);
     const isReadOnlyViewer = urlParams.get("view") === "readonly";
 
     if (isReadOnlyViewer) {
-        // Hide operator toolbar tools and edit buttons for viewers
         const toolbar = document.querySelector(".toolbar-tools");
         if (toolbar) toolbar.style.display = "none";
 
@@ -2646,7 +2776,6 @@ document.addEventListener("DOMContentLoaded", () => {
         const brandTitle = document.querySelector(".brand-title");
         if (brandTitle) brandTitle.textContent = "BFBC LINE-UP (Viewer)";
 
-        // Jump straight to play screen for viewers
         switchView("play", false);
     }
 
@@ -2684,7 +2813,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
-    console.info("BFBC LINE-UP cloud edition loaded. Viewer mode:", isReadOnlyViewer);
+    console.info("BFBC LINE-UP local-first edition loaded. Viewer mode:", isReadOnlyViewer);
 });
 </script>
 

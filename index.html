@@ -348,14 +348,14 @@ header {
     padding-bottom: 4px;
 }
 
-/* 🎯 EXAKTONG BOX / CONTAINER NA KATULAD NG SA DRAWING MO SA SCREENSHOT */
+/* 🎯 STRICT WYSIWYG INDEPENDENT SCREEN WRAPPER */
 .independent-screen-wrapper {
     position: relative;
     width: 100%;
-    max-width: 440px;
+    max-width: 420px;
     height: 100%;
     background: #0f172a;
-    border: 2px solid #38bdf8; /* Sky-blue outline box */
+    border: 2px solid #38bdf8;
     border-radius: 0 0 10px 10px;
     display: flex;
     flex-direction: column;
@@ -363,27 +363,30 @@ header {
     box-shadow: 0 4px 20px rgba(0,0,0,0.6);
 }
 
-/* SONG DISPLAY — SCROLLABLE SA LOOB NG BOX */
+/* SONG DISPLAY — SCROLLABLE SA LOOB NG BOX NA MAY UNIFORM FONT ENGINE */
 
 .output-box {
     flex: 1;
     width: 100%;
     height: 100%;
-    padding: 16px;
-    overflow-y: auto; /* Dito nagse-scroll ang mga lyrics sa loob ng box */
+    padding: 14px;
+    overflow-y: auto;
     overflow-x: hidden;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     font-size: var(--song-font-size);
-    line-height: 1.8;
+    line-height: 1.7;
     scroll-behavior: smooth;
     min-height: 0;
     -webkit-overflow-scrolling: touch;
     text-align: left;
     white-space: pre-wrap;
     overflow-wrap: break-word;
+    /* Pinipigilan ang auto-scaling ng mobile browser sa fonts para laging pantay ang laki */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
 }
 
-/* SONG EDITOR — SCROLLABLE SA LOOB NG BOX */
+/* SONG EDITOR */
 
 #song-editor-workspace {
     position: relative;
@@ -398,7 +401,7 @@ header {
     width: 100%;
     height: 100%;
     min-height: 0;
-    padding: 16px;
+    padding: 14px;
     background: transparent;
     color: var(--text-main);
     border: none;
@@ -406,7 +409,7 @@ header {
     resize: none;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     font-size: var(--song-font-size);
-    line-height: 1.8;
+    line-height: 1.7;
     text-align: left;
     white-space: pre-wrap;
     overflow-wrap: break-word;
@@ -414,6 +417,8 @@ header {
     -webkit-overflow-scrolling: touch;
     box-sizing: border-box;
     z-index: 1;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
 }
 
 #editor-textarea::placeholder {
@@ -429,7 +434,7 @@ header {
     inset: 0;
     width: 100%;
     height: 100%;
-    padding: 16px;
+    padding: 14px;
     overflow-x: hidden;
     overflow-y: auto;
     pointer-events: none;
@@ -437,12 +442,14 @@ header {
     z-index: 2;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     font-size: var(--song-font-size);
-    line-height: 1.8;
+    line-height: 1.7;
     text-align: left;
     white-space: pre-wrap;
     overflow-wrap: break-word;
     box-sizing: border-box;
     -webkit-overflow-scrolling: touch;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
 }
 
 #editor-textarea.color-mirror {
@@ -469,7 +476,7 @@ header {
     display: block;
     white-space: pre-wrap;
     overflow-wrap: break-word;
-    min-height: 1.8em;
+    min-height: 1.7em;
     cursor: pointer;
     touch-action: pan-y;
     text-align: left;

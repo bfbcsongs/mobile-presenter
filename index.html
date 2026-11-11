@@ -1510,10 +1510,11 @@ function appendColoredText(parent, text, absoluteStart) {
     });
 }
 
+/* FIXED SECTION JUMPER REGEX TO ACCEPT ANY SECTION MARKER WITH OR WITHOUT NUMBERS */
 function detectSongSections(content) {
     if (!content) return [];
     const sections = [];
-    const markerPattern = /^[ \t]*\[((?:Intro|Verse|Pre-?Chorus|Bridge|Instrumental|Outro)[ \t]+(?:[1-9]|10))\][ \t]*$/gim;
+    const markerPattern = /^[ \t]*\[((?:Intro|Verse|Pre-?Chorus|Chorus|Bridge|Instrumental|Outro)(?:[ \t]+[0-9]+)?)\][ \t]*$/gim;
     let match;
 
     while ((match = markerPattern.exec(content)) !== null) {
@@ -1549,8 +1550,6 @@ function jumpToSongSection(index, shouldBroadcast = true) {
         broadcastLiveSession(currentPlayingSong.title, index);
     }
 }
-
-/* SONG DISPLAY WITH JUMPER & SECTIONS RESTORED */
 
 function renderSongContent(box, jumper, isPlayMode) {
     if (!box) return;

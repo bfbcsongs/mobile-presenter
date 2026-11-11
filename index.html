@@ -341,14 +341,14 @@ header {
     position: relative;
     overflow: hidden;
     min-height: 0;
-    justify-content: center;
+    justify-content: flex-start;
 }
 
-/* SONG DISPLAY — LEFT ALIGNED */
+/* SONG DISPLAY — FULL WIDTH LEFT ALIGNED */
 
 .output-box {
     flex: 1;
-    max-width: 800px;
+    width: 100%;
     padding: 20px 16px;
     overflow-y: auto;
     overflow-x: hidden;
@@ -363,7 +363,7 @@ header {
     overflow-wrap: break-word;
 }
 
-/* SONG EDITOR — LEFT ALIGNED */
+/* SONG EDITOR — FULL WIDTH LEFT ALIGNED */
 
 #song-editor-workspace {
     position: relative;
@@ -373,10 +373,8 @@ header {
     display: block;
     flex: 1;
     width: 100%;
-    max-width: 800px;
     height: 100%;
     min-height: 0;
-    margin: 0 auto;
     padding: 20px 16px;
     background: transparent;
     color: var(--text-main);
@@ -401,15 +399,13 @@ header {
     text-align: left;
 }
 
-/* COLOR OVERLAY — LEFT ALIGNED */
+/* COLOR OVERLAY — FULL WIDTH LEFT ALIGNED */
 
 #editor-color-overlay {
     position: absolute;
     inset: 0;
-    max-width: 800px;
     width: 100%;
     height: 100%;
-    margin: 0 auto;
     padding: 20px 16px;
     overflow-x: hidden;
     overflow-y: auto;
@@ -1034,7 +1030,6 @@ function initializeCloudSync() {
         songLineColors = snapshot.val() || {};
     });
 
-    /* PERSISTENT ZOOM LEVEL CLOUD SYNC */
     onValue(ref(db, 'lineUpMaker/songZoomLevels'), (snapshot) => {
         const val = snapshot.val();
         if (val) {
@@ -1089,7 +1084,6 @@ function getSongFontSize(title) {
     return clampSongFontSize(savedSize);
 }
 
-/* AUTOMATICALLY SAVE ZOOM TO FIREBASE & LOCAL STORAGE */
 function applySongFontSize(size, autoSave = true) {
     currentSongFontSize = clampSongFontSize(size);
     document.documentElement.style.setProperty("--song-font-size", currentSongFontSize + "px");
@@ -1882,7 +1876,6 @@ function openFullEditor() {
 
 function openPlayToEdit() { openFullEditor(); }
 
-/* SAVING SONG + ZOOM SIZE TO CLOUD */
 async function saveSongFromEditor() {
     const editor = document.getElementById("editor-textarea");
     const content = editor.value.trim();
@@ -1903,7 +1896,6 @@ async function saveSongFromEditor() {
         const key = getSongKey(title);
         await set(ref(db, 'lineUpMaker/songsDatabase/' + title), content);
 
-        // Save zoom & line colors
         songZoomLevels[key] = currentSongFontSize;
         await set(ref(db, 'lineUpMaker/songZoomLevels/' + key), currentSongFontSize);
 

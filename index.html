@@ -11,7 +11,6 @@
 <link rel="apple-touch-icon" href="/icon-192.png">
 
 <script>
-// Register Service Worker for offline launch capability
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
@@ -72,16 +71,10 @@ window.mobilePresenterAuthReady = new Promise((resolve, reject) => {
 
     const unsubscribe = onAuthStateChanged(auth, user => {
         if (!user) return;
-
         unsubscribe();
-
         window.mobilePresenterUID = user.uid;
-
         console.info("Mobile Presenter Firebase connected.");
-        console.info("Device UID:", user.uid);
-
         initializeCloudSync();
-
         resolve(user);
     });
 });
@@ -1145,15 +1138,13 @@ function switchView(viewName, pushHistory = true) {
     }
 }
 
+/* RESTORED PROPER PREVIOUS VIEW HISTORY NAVIGATION */
 function goBack(fromSystemBack = false) {
     closeLineColorTool();
 
-    const playView = document.getElementById("view-play");
     const categoryModal = document.getElementById("category-picker-modal");
-    
-    if (playView && playView.classList.contains("active") && categoryModal) {
-        switchView("home", false);
-        categoryModal.style.display = "flex";
+    if (categoryModal && categoryModal.style.display === "flex") {
+        categoryModal.style.display = "none";
         return;
     }
 
@@ -1163,14 +1154,10 @@ function goBack(fromSystemBack = false) {
         return;
     }
 
-    const confirmed = window.confirm(
-        "Are you sure you want to leave BFBC LINE-UP?"
-    );
-
+    const confirmed = window.confirm("Are you sure you want to leave BFBC LINE-UP?");
     if (!confirmed) return;
 
     allowBrowserExit = true;
-
     if (fromSystemBack) {
         window.history.back();
     } else {
@@ -1510,7 +1497,6 @@ function appendColoredText(parent, text, absoluteStart) {
     });
 }
 
-/* FIXED SECTION JUMPER REGEX TO ACCEPT ANY SECTION MARKER WITH OR WITHOUT NUMBERS */
 function detectSongSections(content) {
     if (!content) return [];
     const sections = [];
@@ -1883,6 +1869,7 @@ function openFullEditor() {
 
 function openPlayToEdit() { openFullEditor(); }
 
+/* RESTORED FIREBASE SAVE SONG MECHANISM */
 async function saveSongFromEditor() {
     const editor = document.getElementById("editor-textarea");
     const content = editor.value.trim();

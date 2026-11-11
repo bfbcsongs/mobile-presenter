@@ -321,7 +321,7 @@ header {
     flex-direction: column;
     height: 100%;
     min-height: 0;
-    padding: 8px; /* Konting space sa pinakalabas para litaw na litaw ang outline screen */
+    padding: 6px;
 }
 
 .edit-topbar {
@@ -343,10 +343,28 @@ header {
     position: relative;
     overflow: hidden;
     min-height: 0;
-    justify-content: flex-start;
+    justify-content: center; /* Naka-center ang independent screen container sa buong view */
+    background: #060911;
 }
 
-/* SONG DISPLAY — INDEPENDENT SCREEN WITH OUTLINE/BORDER */
+/* 🎯 TUNAY NA INDEPENDENT SCREEN CONTAINER (Fixed Virtual Width) */
+.independent-screen-wrapper {
+    position: relative;
+    width: 100%;
+    max-width: 420px; /* Eksaktong virtual screen width para laging pareho ang wrap at format sa kahit anong phone */
+    height: 100%;
+    background: #0f172a;
+    border-left: 2px solid #38bdf8;
+    border-right: 2px solid #38bdf8;
+    border-bottom: 2px solid #38bdf8;
+    border-radius: 0 0 10px 10px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+}
+
+/* SONG DISPLAY — INDEPENDENT SCREEN */
 
 .output-box {
     flex: 1;
@@ -364,15 +382,9 @@ header {
     text-align: left;
     white-space: pre-wrap;
     overflow-wrap: break-word;
-    
-    /* 🎯 DITO NAKA-LAGAY ANG OUTLINE AT INDEPENDENT SCREEN LOOK */
-    background: #0f172a;
-    border: 2px solid #38bdf8;
-    border-radius: 0 0 10px 10px;
-    box-shadow: inset 0 2px 6px rgba(0,0,0,0.5);
 }
 
-/* SONG EDITOR — INDEPENDENT SCREEN WITH OUTLINE/BORDER */
+/* SONG EDITOR — INDEPENDENT SCREEN */
 
 #song-editor-workspace {
     position: relative;
@@ -388,10 +400,9 @@ header {
     height: 100%;
     min-height: 0;
     padding: 16px;
-    background: #0f172a;
+    background: transparent;
     color: var(--text-main);
-    border: 2px solid #2563eb; /* Blue outline para sa Editor */
-    border-radius: 0 0 10px 10px;
+    border: none;
     outline: none;
     resize: none;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -404,7 +415,6 @@ header {
     -webkit-overflow-scrolling: touch;
     box-sizing: border-box;
     z-index: 1;
-    box-shadow: inset 0 2px 6px rgba(0,0,0,0.5);
 }
 
 #editor-textarea::placeholder {
@@ -643,18 +653,6 @@ header {
     .tool-btn { font-size: 0.65rem; padding: 4px 6px; }
     .play-right-bar { right: 4px; }
     .jumper-chip { width: 62px; min-height: 36px; font-size: 0.65rem; }
-
-    .output-box {
-        padding: 12px;
-    }
-
-    #editor-textarea {
-        padding: 12px;
-    }
-
-    #editor-color-overlay {
-        padding: 12px;
-    }
 }
 </style>
 </head>
@@ -706,7 +704,9 @@ header {
                 </div>
             </div>
             <div class="editor-workspace">
-                <div id="edit-lyrics-box" class="output-box"></div>
+                <div class="independent-screen-wrapper">
+                    <div id="edit-lyrics-box" class="output-box"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -753,33 +753,35 @@ header {
                 </div>
             </div>
 
-            <div class="editor-workspace" id="song-editor-workspace">
+            <div class="editor-workspace">
+                <div class="independent-screen-wrapper" id="song-editor-workspace">
 
-                <textarea id="editor-textarea"
-                    placeholder="Type or paste lyrics and chords here..."></textarea>
+                    <textarea id="editor-textarea"
+                        placeholder="Type or paste lyrics and chords here..."></textarea>
 
-                <div id="editor-color-overlay"></div>
+                    <div id="editor-color-overlay"></div>
 
-                <div id="line-color-toolbar" class="line-color-toolbar">
+                    <div id="line-color-toolbar" class="line-color-toolbar">
 
-                    <button class="line-color-btn"
-                        id="green-line-btn"
-                        style="color:#4ade80;"
-                        onclick="selectLineColor('green')"
-                        title="Green">
-                        🟢
-                    </button>
+                        <button class="line-color-btn"
+                            id="green-line-btn"
+                            style="color:#4ade80;"
+                            onclick="selectLineColor('green')"
+                            title="Green">
+                            🟢
+                        </button>
 
-                    <button class="line-color-btn"
-                        id="white-line-btn"
-                        style="color:#ffffff;"
-                        onclick="selectLineColor('white')"
-                        title="White">
-                        ⚪
-                    </button>
+                        <button class="line-color-btn"
+                            id="white-line-btn"
+                            style="color:#ffffff;"
+                            onclick="selectLineColor('white')"
+                            title="White">
+                            ⚪
+                        </button>
+
+                    </div>
 
                 </div>
-
             </div>
         </div>
     </div>
@@ -793,8 +795,10 @@ header {
                 <button id="play-edit-btn" class="btn btn-sm btn-primary" onclick="openPlayToEdit()">Edit</button>
             </div>
             <div class="play-workspace">
-                <div id="play-lyrics-box" class="output-box"></div>
-                <div id="floating-jumper-bar" class="play-right-bar"></div>
+                <div class="independent-screen-wrapper">
+                    <div id="play-lyrics-box" class="output-box"></div>
+                    <div id="floating-jumper-bar" class="play-right-bar"></div>
+                </div>
             </div>
         </div>
     </div>

@@ -321,6 +321,7 @@ header {
     flex-direction: column;
     height: 100%;
     min-height: 0;
+    padding: 8px; /* Konting space sa pinakalabas para litaw na litaw ang outline screen */
 }
 
 .edit-topbar {
@@ -332,6 +333,7 @@ header {
     border-bottom: 1px solid var(--panel-border);
     flex-shrink: 0;
     gap: 6px;
+    border-radius: 8px 8px 0 0;
 }
 
 .editor-workspace,
@@ -344,13 +346,13 @@ header {
     justify-content: flex-start;
 }
 
-/* SONG DISPLAY — MAXIMIZED FULL SCREEN INDEPENDENT */
+/* SONG DISPLAY — INDEPENDENT SCREEN WITH OUTLINE/BORDER */
 
 .output-box {
     flex: 1;
     width: 100%;
     height: 100%;
-    padding: 12px 14px;
+    padding: 16px;
     overflow-y: auto;
     overflow-x: hidden;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -362,9 +364,15 @@ header {
     text-align: left;
     white-space: pre-wrap;
     overflow-wrap: break-word;
+    
+    /* 🎯 DITO NAKA-LAGAY ANG OUTLINE AT INDEPENDENT SCREEN LOOK */
+    background: #0f172a;
+    border: 2px solid #38bdf8;
+    border-radius: 0 0 10px 10px;
+    box-shadow: inset 0 2px 6px rgba(0,0,0,0.5);
 }
 
-/* SONG EDITOR — MAXIMIZED FULL SCREEN INDEPENDENT */
+/* SONG EDITOR — INDEPENDENT SCREEN WITH OUTLINE/BORDER */
 
 #song-editor-workspace {
     position: relative;
@@ -379,10 +387,11 @@ header {
     width: 100%;
     height: 100%;
     min-height: 0;
-    padding: 12px 14px;
-    background: transparent;
+    padding: 16px;
+    background: #0f172a;
     color: var(--text-main);
-    border: none;
+    border: 2px solid #2563eb; /* Blue outline para sa Editor */
+    border-radius: 0 0 10px 10px;
     outline: none;
     resize: none;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -395,6 +404,7 @@ header {
     -webkit-overflow-scrolling: touch;
     box-sizing: border-box;
     z-index: 1;
+    box-shadow: inset 0 2px 6px rgba(0,0,0,0.5);
 }
 
 #editor-textarea::placeholder {
@@ -403,14 +413,14 @@ header {
     text-align: left;
 }
 
-/* COLOR OVERLAY — MAXIMIZED FULL SCREEN INDEPENDENT */
+/* COLOR OVERLAY — INDEPENDENT SCREEN */
 
 #editor-color-overlay {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
-    padding: 12px 14px;
+    padding: 16px;
     overflow-x: hidden;
     overflow-y: auto;
     pointer-events: none;
@@ -635,15 +645,15 @@ header {
     .jumper-chip { width: 62px; min-height: 36px; font-size: 0.65rem; }
 
     .output-box {
-        padding: 10px 12px;
+        padding: 12px;
     }
 
     #editor-textarea {
-        padding: 10px 12px;
+        padding: 12px;
     }
 
     #editor-color-overlay {
-        padding: 10px 12px;
+        padding: 12px;
     }
 }
 </style>

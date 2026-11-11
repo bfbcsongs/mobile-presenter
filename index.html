@@ -351,7 +351,7 @@ header {
     justify-content: center;
 }
 
-/* SONG DISPLAY — CHANGED TO LEFT */
+/* SONG DISPLAY — LEFT ALIGNED */
 
 .output-box {
     flex: 1;
@@ -365,12 +365,12 @@ header {
     scroll-behavior: smooth;
     min-height: 0;
     -webkit-overflow-scrolling: touch;
-    text-align: left; /* 🎯 Changed from center to left */
+    text-align: left;
     white-space: pre-wrap;
     overflow-wrap: break-word;
 }
 
-/* SONG EDITOR — CHANGED TO LEFT */
+/* SONG EDITOR — LEFT ALIGNED */
 
 #song-editor-workspace {
     position: relative;
@@ -393,7 +393,7 @@ header {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     font-size: var(--song-font-size);
     line-height: 1.8;
-    text-align: left; /* 🎯 Changed from center to left */
+    text-align: left;
     white-space: pre-wrap;
     overflow-wrap: break-word;
     overflow-y: auto !important;
@@ -405,10 +405,10 @@ header {
 #editor-textarea::placeholder {
     color: var(--text-muted);
     opacity: 0.8;
-    text-align: left; /* 🎯 Changed from center to left */
+    text-align: left;
 }
 
-/* COLOR OVERLAY — CHANGED TO LEFT */
+/* COLOR OVERLAY — LEFT ALIGNED */
 
 #editor-color-overlay {
     position: absolute;
@@ -426,7 +426,7 @@ header {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     font-size: var(--song-font-size);
     line-height: 1.8;
-    text-align: left; /* 🎯 Changed from center to left */
+    text-align: left;
     white-space: pre-wrap;
     overflow-wrap: break-word;
     box-sizing: border-box;
@@ -460,7 +460,7 @@ header {
     min-height: 1.8em;
     cursor: pointer;
     touch-action: pan-y;
-    text-align: left; /* 🎯 Changed from center to left */
+    text-align: left;
 }
 
 .editor-color-line.green {
@@ -931,9 +931,9 @@ header {
 
 let categories = ["Opening", "Joyful", "Solemn", "Offering", "Closing"];
 let activeLineUp = {};
-let songsDatabase = {}; // Master Songs fetched from Firebase
+let songsDatabase = {}; 
 let songKeys = {};
-let setLists = [];     // Stored ONLY locally in localStorage
+let setLists = [];
 
 /* ZOOM */
 
@@ -950,17 +950,11 @@ let currentPlayingSong = { title: "", content: "", fontSize: 16 };
 let viewHistory = ["home"];
 let pendingSetListIndex = null;
 
-/* BACK NAVIGATION CONTROL */
-
 let allowBrowserExit = false;
 let browserBackGuardInstalled = false;
 
-/* ADD SONG */
-
 let newSongTitle = "";
 let isNewSongDraft = false;
-
-/* LINE COLORS */
 
 let songLineColors = {};
 let currentLineColors = {};
@@ -970,8 +964,6 @@ let lineColorsDirty = false;
 
 const notesSharp = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const notesFlat = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
-
-/* PASSKEY HELPER FOR FIREBASE EDITING */
 
 function checkAdminPasskey(actionName = "Action") {
     const passkey = prompt(`Enter Admin Passkey to ${actionName}:`);
@@ -983,8 +975,6 @@ function checkAdminPasskey(actionName = "Action") {
     }
     return true;
 }
-
-/* LIVE BROADCAST CONTROLLER & SYNC */
 
 let isLiveBroadcasting = false;
 
@@ -1042,14 +1032,11 @@ function broadcastLiveSession(songTitle, sectionIndex = 0, force = false) {
     }
 }
 
-/* FIREBASE CLOUD SYNC FOR MASTER SONGS */
-
 function initializeCloudSync() {
     const db = window.mobilePresenterFirebase.db;
     const ref = window.mobilePresenterFirebase.ref;
     const onValue = window.mobilePresenterFirebase.onValue;
 
-    // 1. Sync Songs Database from Firebase Cloud
     onValue(ref(db, 'lineUpMaker/songsDatabase'), (snapshot) => {
         songsDatabase = snapshot.val() || {};
         
@@ -1061,7 +1048,6 @@ function initializeCloudSync() {
         renderNewLineUpForm();
     });
 
-    // 2. Sync Categories from Firebase
     onValue(ref(db, 'lineUpMaker/categories'), (snapshot) => {
         const val = snapshot.val();
         if (val) {
@@ -1070,12 +1056,10 @@ function initializeCloudSync() {
         renderNewLineUpForm();
     });
 
-    // 3. Sync Line Colors
     onValue(ref(db, 'lineUpMaker/songLineColors'), (snapshot) => {
         songLineColors = snapshot.val() || {};
     });
 
-    // 4. Sync Live Session
     onValue(ref(db, 'lineUpMaker/liveSession'), (snapshot) => {
         const liveData = snapshot.val();
         if (liveData) {
@@ -1083,8 +1067,6 @@ function initializeCloudSync() {
         }
     });
 }
-
-/* HELPERS */
 
 function escapeHTML(value) {
     return String(value).replace(/[&<>"']/g, char => ({
@@ -1103,8 +1085,6 @@ function safeKey(title) {
 function getSongKey(title) {
     return songKeys[title] || safeKey(title);
 }
-
-/* ZOOM FUNCTIONS */
 
 function clampSongFontSize(size) {
     return Math.max(
@@ -1141,8 +1121,6 @@ function changeEditorZoom(amount) {
     applySongFontSize(currentSongFontSize + amount);
 }
 
-/* VIEW SWITCHING */
-
 function switchView(viewName, pushHistory = true) {
     const normalizedName = viewName.startsWith("view-")
         ? viewName.substring(5)
@@ -1166,8 +1144,6 @@ function switchView(viewName, pushHistory = true) {
         }
     }
 }
-
-/* BACK NAVIGATION */
 
 function goBack(fromSystemBack = false) {
     closeLineColorTool();
@@ -1220,8 +1196,6 @@ function installBrowserBackGuard() {
     });
 }
 
-/* DRAWERS AND MODALS */
-
 function openDrawer(drawerId) {
     document.querySelectorAll(".drawer-overlay").forEach(el => el.style.display = "none");
     const drawer = document.getElementById(drawerId);
@@ -1237,8 +1211,6 @@ function closeModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) modal.style.display = "none";
 }
-
-/* ADD SONG TITLE */
 
 function openAddSongModal() {
     document.getElementById("new-song-title-input").value = "";
@@ -1292,8 +1264,6 @@ function confirmAddSongTitle() {
 
     document.getElementById("editor-textarea").focus();
 }
-
-/* TRANSPOSE */
 
 function transposeGlobal(amount) {
     globalSemitones += amount;
@@ -1380,8 +1350,6 @@ function transposeSongContent(content, amount) {
         return transposeChordLine(line, amount);
     }).join("\n");
 }
-
-/* LINE COLOR TOOL */
 
 function toggleLineColorTool() {
     if (lineColorToolOpen) closeLineColorTool();
@@ -1542,8 +1510,6 @@ function appendColoredText(parent, text, absoluteStart) {
     });
 }
 
-/* SONG SECTION JUMPER */
-
 function detectSongSections(content) {
     if (!content) return [];
     const sections = [];
@@ -1584,7 +1550,7 @@ function jumpToSongSection(index, shouldBroadcast = true) {
     }
 }
 
-/* SONG DISPLAY */
+/* SONG DISPLAY WITH JUMPER & SECTIONS RESTORED */
 
 function renderSongContent(box, jumper, isPlayMode) {
     if (!box) return;
@@ -1643,8 +1609,6 @@ function renderPlayScreen() {
 function renderEditScreen() {
     renderSongContent(document.getElementById("edit-lyrics-box"), null, false);
 }
-
-/* SET LIST */
 
 function renderSetList() {
     const container = document.getElementById("setlist-container");
@@ -1779,8 +1743,6 @@ function backToSetList() {
     openDrawer("drawer-setlist");
 }
 
-/* PLAY LOADED LINE-UP */
-
 let playLineUpEntries = [];
 let currentLineUpIndex = 0;
 
@@ -1842,8 +1804,6 @@ function playLineUpSongAt(index) {
     playSong(title, true);
     document.getElementById("play-song-title").textContent = category + " — " + title;
 }
-
-/* SONG DATABASE */
 
 function renderSongsDatabase() {
     const container = document.getElementById("songs-db-container");
@@ -1924,8 +1884,6 @@ function openFullEditor() {
 
 function openPlayToEdit() { openFullEditor(); }
 
-/* SAVE SONG TO FIREBASE */
-
 async function saveSongFromEditor() {
     const editor = document.getElementById("editor-textarea");
     const content = editor.value.trim();
@@ -1982,8 +1940,6 @@ async function deleteCurrentSong() {
         alert("Failed to delete song: " + err.message);
     }
 }
-
-/* NEW LINE-UP FORM */
 
 function renderNewLineUpForm() {
     const container = document.getElementById("new-lineup-selectors");
@@ -2063,8 +2019,6 @@ function saveNewLineUpFromForm() {
     openDrawer("drawer-setlist");
 }
 
-/* PLAY SONG */
-
 function playSong(title, shouldBroadcast = true) {
     let songContent = songsDatabase[title];
 
@@ -2108,8 +2062,6 @@ function handleIncomingLiveSync(liveData) {
     }
 }
 
-/* QR */
-
 function openQRModal() {
     const baseUrl = window.location.origin + window.location.pathname;
     const viewerUrl = baseUrl + "?view=readonly";
@@ -2123,8 +2075,6 @@ function openQRModal() {
     }
     document.getElementById("qr-modal").style.display = "flex";
 }
-
-/* CATEGORIES */
 
 function openAddCategoryModal() {
     document.getElementById("add-cat-modal").style.display = "flex";
@@ -2151,8 +2101,6 @@ async function confirmAddCategory() {
         } catch (err) {}
     }
 }
-
-/* INITIALIZE */
 
 document.addEventListener("DOMContentLoaded", () => {
     try {

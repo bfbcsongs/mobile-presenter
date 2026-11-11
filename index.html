@@ -1544,19 +1544,21 @@ function appendColoredText(parent, text, absoluteStart) {
     });
 }
 
-/* SONG SECTION JUMPER */
+/* SONG SECTION JUMPER (STRICT NUMBERED 1-10 WITH LABELS) */
 
 function detectSongSections(content) {
     if (!content) return [];
     const sections = [];
-    const markerPattern = /^[ \t]*\[(Intro|Verse(?:[ \t]*\d+)?|Pre-?Chorus|Pre|Chorus(?:[ \t]*\d+)?|Bridge|Instrumental|Outro)\][ \t]*$/gim;
+    
+    // Strict pattern para sa Intro, Verse, Pre-Chorus, Bridge, Instrumental, Outro na may numbers 1-10
+    const markerPattern = /^[ \t]*\[((?:Intro|Verse|Pre-?Chorus|Bridge|Instrumental|Outro)[ \t]+(?:[1-9]|10))\][ \t]*$/gim;
     let match;
 
     while ((match = markerPattern.exec(content)) !== null) {
         sections.push({
             start: match.index,
             markerEnd: match.index + match[0].length,
-            label: match[1].trim().toUpperCase()
+            label: match[1].trim().toUpperCase() // Sisiguraduhing lumalabas ang buong label (hal. VERSE 1)
         });
     }
     return sections;

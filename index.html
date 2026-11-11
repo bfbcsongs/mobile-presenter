@@ -661,7 +661,6 @@ header {
             <button onclick="transposeGlobal(1)">+</button>
         </div>
 
-        <!-- GO LIVE TOGGLE BUTTON -->
         <button id="live-toggle-btn" class="tool-btn" onclick="toggleLiveBroadcast()" style="background:#334155;color:#94a3b8;">
             🔴 Offline
         </button>
@@ -792,17 +791,12 @@ header {
 
 </div>
 
-<!-- ADD SONG TITLE MODAL -->
-<div id="add-song-title-modal" class="drawer-overlay"
-     onclick="closeAddSongTitleModal()">
+<!-- MODALS & DRAWERS -->
+<div id="add-song-title-modal" class="drawer-overlay" onclick="closeAddSongTitleModal()">
     <div class="drawer-panel" onclick="event.stopPropagation()">
         <h3 style="font-size:0.95rem;color:var(--accent);">Add Song</h3>
-
-        <input type="text" id="new-song-title-input"
-            placeholder="Enter Song Title..."
-            autocomplete="off"
+        <input type="text" id="new-song-title-input" placeholder="Enter Song Title..." autocomplete="off"
             style="background:#0f172a;border:1px solid #334155;color:#fff;padding:10px;border-radius:6px;font-size:0.9rem;width:100%;">
-
         <div style="display:flex;gap:8px;">
             <button class="btn" style="flex:1;" onclick="closeAddSongTitleModal()">Back</button>
             <button class="btn btn-primary" style="flex:1;" onclick="confirmAddSongTitle()">OK</button>
@@ -810,7 +804,6 @@ header {
     </div>
 </div>
 
-<!-- SET LIST DRAWER -->
 <div id="drawer-setlist" class="drawer-overlay" onclick="closeDrawer('drawer-setlist')">
     <div class="drawer-panel" onclick="event.stopPropagation()">
         <h3 style="color:var(--success);font-size:0.95rem;">Set List</h3>
@@ -819,7 +812,6 @@ header {
     </div>
 </div>
 
-<!-- SHOW INDIVIDUAL SET LIST DRAWER -->
 <div id="drawer-show-setlist" class="drawer-overlay" onclick="closeDrawer('drawer-show-setlist')">
     <div class="drawer-panel" onclick="event.stopPropagation()">
         <h3 id="show-setlist-title" style="color:var(--section);font-size:0.95rem;">Set List Details</h3>
@@ -828,7 +820,6 @@ header {
     </div>
 </div>
 
-<!-- SONG DATABASE -->
 <div id="drawer-songs" class="drawer-overlay" onclick="closeDrawer('drawer-songs')">
     <div class="drawer-panel" onclick="event.stopPropagation()">
         <h3 style="color:var(--accent);font-size:0.95rem;">Song Database (Cloud)</h3>
@@ -839,7 +830,6 @@ header {
     </div>
 </div>
 
-<!-- NEW LINEUP -->
 <div id="drawer-newlineup" class="drawer-overlay" onclick="closeDrawer('drawer-newlineup')">
     <div class="drawer-panel" onclick="event.stopPropagation()">
         <h3 style="color:var(--highlight);font-size:0.95rem;">Create New Line-up</h3>
@@ -854,7 +844,6 @@ header {
     </div>
 </div>
 
-<!-- SELECT SONG -->
 <div id="select-song-modal" class="drawer-overlay" onclick="closeModal('select-song-modal')">
     <div class="drawer-panel" onclick="event.stopPropagation()">
         <h3 style="font-size:0.95rem;">Select Song for <span id="select-modal-cat" style="color:var(--section);"></span></h3>
@@ -863,7 +852,6 @@ header {
     </div>
 </div>
 
-<!-- SET LIST CONFIRMATION -->
 <div id="confirm-lineup-modal" class="drawer-overlay">
     <div class="drawer-panel" onclick="event.stopPropagation()">
         <h3 style="color:var(--success);font-size:0.95rem;">Load Line-up?</h3>
@@ -875,19 +863,15 @@ header {
     </div>
 </div>
 
-<!-- CATEGORY-FIRST PLAYBACK PICKER -->
 <div id="category-picker-modal" class="drawer-overlay">
     <div class="drawer-panel" onclick="event.stopPropagation()">
         <h3 style="color:var(--section);font-size:0.95rem;">Select Song Category</h3>
-        <p style="color:var(--text-muted);font-size:0.75rem;">
-            Choose a category to begin playback.
-        </p>
+        <p style="color:var(--text-muted);font-size:0.75rem;">Choose a category to begin playback.</p>
         <div id="category-picker-list" class="category-picker-list"></div>
         <button class="btn" onclick="closeModal('category-picker-modal')">Cancel</button>
     </div>
 </div>
 
-<!-- SAVE ACTIVE LINEUP -->
 <div id="save-lineup-modal" class="drawer-overlay" onclick="closeModal('save-lineup-modal')">
     <div class="drawer-panel" onclick="event.stopPropagation()">
         <h3 style="color:var(--success);font-size:0.95rem;">Save Active Line-up</h3>
@@ -898,7 +882,6 @@ header {
     </div>
 </div>
 
-<!-- QR -->
 <div id="qr-modal" class="drawer-overlay" onclick="closeModal('qr-modal')">
     <div class="drawer-panel" onclick="event.stopPropagation()" style="align-items:center;text-align:center;">
         <h3 style="font-size:0.95rem;">Viewer QR Code (Read-Only)</h3>
@@ -908,7 +891,6 @@ header {
     </div>
 </div>
 
-<!-- ADD CATEGORY -->
 <div id="add-cat-modal" class="drawer-overlay" onclick="closeModal('add-cat-modal')">
     <div class="drawer-panel" onclick="event.stopPropagation()">
         <h3 style="font-size:0.95rem;">Add Custom Category</h3>
@@ -928,7 +910,7 @@ let songsDatabase = {};
 let songKeys = {};
 let setLists = [];
 
-/* ZOOM */
+/* ZOOM & CLOUD SYNC */
 
 let songZoomLevels = {};
 let currentSongFontSize = 16;
@@ -1032,7 +1014,6 @@ function initializeCloudSync() {
 
     onValue(ref(db, 'lineUpMaker/songsDatabase'), (snapshot) => {
         songsDatabase = snapshot.val() || {};
-        
         try {
             localStorage.setItem("offline_cached_songs", JSON.stringify(songsDatabase));
         } catch(e) {}
@@ -1051,6 +1032,17 @@ function initializeCloudSync() {
 
     onValue(ref(db, 'lineUpMaker/songLineColors'), (snapshot) => {
         songLineColors = snapshot.val() || {};
+    });
+
+    /* PERSISTENT ZOOM LEVEL CLOUD SYNC */
+    onValue(ref(db, 'lineUpMaker/songZoomLevels'), (snapshot) => {
+        const val = snapshot.val();
+        if (val) {
+            songZoomLevels = val;
+            try {
+                localStorage.setItem("offline_cached_zooms", JSON.stringify(songZoomLevels));
+            } catch(e) {}
+        }
     });
 
     onValue(ref(db, 'lineUpMaker/liveSession'), (snapshot) => {
@@ -1097,12 +1089,34 @@ function getSongFontSize(title) {
     return clampSongFontSize(savedSize);
 }
 
-function applySongFontSize(size) {
+/* AUTOMATICALLY SAVE ZOOM TO FIREBASE & LOCAL STORAGE */
+function applySongFontSize(size, autoSave = true) {
     currentSongFontSize = clampSongFontSize(size);
     document.documentElement.style.setProperty("--song-font-size", currentSongFontSize + "px");
 
     const label = document.getElementById("editor-zoom-label");
     if (label) label.textContent = currentSongFontSize + "px";
+
+    if (currentPlayingSong && currentPlayingSong.title) {
+        currentPlayingSong.fontSize = currentSongFontSize;
+        const key = getSongKey(currentPlayingSong.title);
+        songZoomLevels[key] = currentSongFontSize;
+
+        if (autoSave) {
+            try {
+                localStorage.setItem("offline_cached_zooms", JSON.stringify(songZoomLevels));
+            } catch(e) {}
+
+            if (navigator.onLine && window.mobilePresenterFirebase) {
+                const db = window.mobilePresenterFirebase.db;
+                const ref = window.mobilePresenterFirebase.ref;
+                const set = window.mobilePresenterFirebase.set;
+                set(ref(db, 'lineUpMaker/songZoomLevels/' + key), currentSongFontSize).catch(err => {
+                    console.warn("Could not save zoom to cloud:", err);
+                });
+            }
+        }
+    }
 
     const editorView = document.getElementById("view-song-editor");
     if (editorView && editorView.classList.contains("active")) {
@@ -1111,7 +1125,7 @@ function applySongFontSize(size) {
 }
 
 function changeEditorZoom(amount) {
-    applySongFontSize(currentSongFontSize + amount);
+    applySongFontSize(currentSongFontSize + amount, true);
 }
 
 function switchView(viewName, pushHistory = true) {
@@ -1138,7 +1152,6 @@ function switchView(viewName, pushHistory = true) {
     }
 }
 
-/* RESTORED PROPER PREVIOUS VIEW HISTORY NAVIGATION */
 function goBack(fromSystemBack = false) {
     closeLineColorTool();
 
@@ -1240,7 +1253,7 @@ function confirmAddSongTitle() {
     currentLineColors = {};
     lineColorsDirty = false;
 
-    applySongFontSize(DEFAULT_SONG_FONT_SIZE);
+    applySongFontSize(DEFAULT_SONG_FONT_SIZE, false);
     document.getElementById("editor-textarea").value = "";
     renderColorOverlay();
 
@@ -1547,7 +1560,7 @@ function renderSongContent(box, jumper, isPlayMode) {
         return;
     }
 
-    applySongFontSize(currentPlayingSong.fontSize || getSongFontSize(currentPlayingSong.title));
+    applySongFontSize(currentPlayingSong.fontSize || getSongFontSize(currentPlayingSong.title), false);
     const originalContent = currentPlayingSong.content;
     const content = isPlayMode ? transposeSongContent(originalContent, globalSemitones) : originalContent;
 
@@ -1846,7 +1859,7 @@ function openEditSongDirect(title) {
     lineColorsDirty = false;
 
     closeLineColorTool();
-    applySongFontSize(currentPlayingSong.fontSize);
+    applySongFontSize(currentPlayingSong.fontSize, false);
     document.getElementById("edit-song-title-label").textContent = title;
     renderEditScreen();
     switchView("view-edit");
@@ -1858,7 +1871,7 @@ function openFullEditor() {
     isNewSongDraft = false;
     newSongTitle = "";
 
-    applySongFontSize(getSongFontSize(currentPlayingSong.title));
+    applySongFontSize(getSongFontSize(currentPlayingSong.title), false);
     document.getElementById("song-editor-heading").textContent = "Edit Song Lyrics";
     document.getElementById("editor-textarea").value = currentPlayingSong.content || "";
     renderColorOverlay();
@@ -1869,7 +1882,7 @@ function openFullEditor() {
 
 function openPlayToEdit() { openFullEditor(); }
 
-/* RESTORED FIREBASE SAVE SONG MECHANISM */
+/* SAVING SONG + ZOOM SIZE TO CLOUD */
 async function saveSongFromEditor() {
     const editor = document.getElementById("editor-textarea");
     const content = editor.value.trim();
@@ -1887,14 +1900,23 @@ async function saveSongFromEditor() {
     const set = window.mobilePresenterFirebase.set;
 
     try {
+        const key = getSongKey(title);
         await set(ref(db, 'lineUpMaker/songsDatabase/' + title), content);
+
+        // Save zoom & line colors
+        songZoomLevels[key] = currentSongFontSize;
+        await set(ref(db, 'lineUpMaker/songZoomLevels/' + key), currentSongFontSize);
+
         if (lineColorsDirty) {
-            const key = getSongKey(title);
             songLineColors[key] = currentLineColors;
             await set(ref(db, 'lineUpMaker/songLineColors/' + key), currentLineColors);
         }
 
         songsDatabase[title] = content;
+        try {
+            localStorage.setItem("offline_cached_zooms", JSON.stringify(songZoomLevels));
+        } catch(e) {}
+
         alert("Song saved to Firebase Cloud Master Database!");
         playSong(title, true);
     } catch (err) {
@@ -2092,6 +2114,9 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
         const localSongs = JSON.parse(localStorage.getItem("offline_cached_songs") || "{}");
         if (Object.keys(localSongs).length > 0) songsDatabase = localSongs;
+
+        const localZooms = JSON.parse(localStorage.getItem("offline_cached_zooms") || "{}");
+        if (Object.keys(localZooms).length > 0) songZoomLevels = localZooms;
     } catch(e) {}
 
     const urlParams = new URLSearchParams(window.location.search);
@@ -2114,7 +2139,7 @@ document.addEventListener("DOMContentLoaded", () => {
     renderSetList();
     renderSongsDatabase();
 
-    applySongFontSize(DEFAULT_SONG_FONT_SIZE);
+    applySongFontSize(DEFAULT_SONG_FONT_SIZE, false);
     initializeColorEditor();
     installBrowserBackGuard();
 
@@ -2132,7 +2157,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (event.key === "Enter") confirmAddSongTitle();
     });
 
-    console.info("BFBC LINE-UP loaded. Master Songs: Firebase Cloud | Line-ups: Local Device Storage.");
+    console.info("BFBC LINE-UP loaded. Master Songs & Zooms: Firebase Cloud | Line-ups: Local Device Storage.");
 });
 </script>
 

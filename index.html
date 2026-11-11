@@ -351,7 +351,7 @@ header {
     justify-content: center;
 }
 
-/* SONG DISPLAY */
+/* SONG DISPLAY — CHANGED TO LEFT */
 
 .output-box {
     flex: 1;
@@ -365,12 +365,12 @@ header {
     scroll-behavior: smooth;
     min-height: 0;
     -webkit-overflow-scrolling: touch;
-    text-align: center;
+    text-align: left; /* 🎯 Changed from center to left */
     white-space: pre-wrap;
     overflow-wrap: break-word;
 }
 
-/* SONG EDITOR */
+/* SONG EDITOR — CHANGED TO LEFT */
 
 #song-editor-workspace {
     position: relative;
@@ -393,10 +393,10 @@ header {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     font-size: var(--song-font-size);
     line-height: 1.8;
-    text-align: center;
+    text-align: left; /* 🎯 Changed from center to left */
     white-space: pre-wrap;
     overflow-wrap: break-word;
-    overflow-y: auto !important; /* 🎯 Dito naaayos ang pag-scroll */
+    overflow-y: auto !important;
     -webkit-overflow-scrolling: touch;
     box-sizing: border-box;
     z-index: 1;
@@ -405,10 +405,10 @@ header {
 #editor-textarea::placeholder {
     color: var(--text-muted);
     opacity: 0.8;
-    text-align: center;
+    text-align: left; /* 🎯 Changed from center to left */
 }
 
-/* COLOR OVERLAY */
+/* COLOR OVERLAY — CHANGED TO LEFT */
 
 #editor-color-overlay {
     position: absolute;
@@ -420,13 +420,13 @@ header {
     padding: 20px 16px;
     overflow-x: hidden;
     overflow-y: auto;
-    pointer-events: none; /* 🎯 Hahayaan ang daliri na mag-scroll sa textarea */
+    pointer-events: none;
     display: block;
     z-index: 2;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     font-size: var(--song-font-size);
     line-height: 1.8;
-    text-align: center;
+    text-align: left; /* 🎯 Changed from center to left */
     white-space: pre-wrap;
     overflow-wrap: break-word;
     box-sizing: border-box;
@@ -460,6 +460,7 @@ header {
     min-height: 1.8em;
     cursor: pointer;
     touch-action: pan-y;
+    text-align: left; /* 🎯 Changed from center to left */
 }
 
 .editor-color-line.green {
@@ -1052,7 +1053,6 @@ function initializeCloudSync() {
     onValue(ref(db, 'lineUpMaker/songsDatabase'), (snapshot) => {
         songsDatabase = snapshot.val() || {};
         
-        // Cache to local storage as fallback for offline use
         try {
             localStorage.setItem("offline_cached_songs", JSON.stringify(songsDatabase));
         } catch(e) {}
@@ -1172,7 +1172,6 @@ function switchView(viewName, pushHistory = true) {
 function goBack(fromSystemBack = false) {
     closeLineColorTool();
 
-    // 🎯 FIX: Kung ang nakasalang sa screen ay Play View at may Categories modal, ibalik sa Category picker!
     const playView = document.getElementById("view-play");
     const categoryModal = document.getElementById("category-picker-modal");
     
@@ -1517,7 +1516,6 @@ function initializeColorEditor() {
         renderColorOverlay();
     });
 
-    // 🎯 SMOOTH SCROLL SYNC
     editor.addEventListener("scroll", () => {
         if (!lineColorToolOpen) {
             overlay.scrollTop = editor.scrollTop;
@@ -1544,13 +1542,11 @@ function appendColoredText(parent, text, absoluteStart) {
     });
 }
 
-/* SONG SECTION JUMPER (STRICT NUMBERED 1-10 WITH LABELS) */
+/* SONG SECTION JUMPER */
 
 function detectSongSections(content) {
     if (!content) return [];
     const sections = [];
-    
-    // Strict pattern para sa Intro, Verse, Pre-Chorus, Bridge, Instrumental, Outro na may numbers 1-10
     const markerPattern = /^[ \t]*\[((?:Intro|Verse|Pre-?Chorus|Bridge|Instrumental|Outro)[ \t]+(?:[1-9]|10))\][ \t]*$/gim;
     let match;
 
@@ -1558,7 +1554,7 @@ function detectSongSections(content) {
         sections.push({
             start: match.index,
             markerEnd: match.index + match[0].length,
-            label: match[1].trim().toUpperCase() // Sisiguraduhing lumalabas ang buong label (hal. VERSE 1)
+            label: match[1].trim().toUpperCase()
         });
     }
     return sections;
@@ -1596,7 +1592,7 @@ function renderSongContent(box, jumper, isPlayMode) {
     if (jumper) jumper.innerHTML = "";
 
     if (!currentPlayingSong || !currentPlayingSong.content) {
-        box.innerHTML = "<div style='text-align: center; color: #888; padding: 20px;'>No song loaded.</div>";
+        box.innerHTML = "<div style='text-align: left; color: #888; padding: 20px;'>No song loaded.</div>";
         return;
     }
 
@@ -1648,14 +1644,13 @@ function renderEditScreen() {
     renderSongContent(document.getElementById("edit-lyrics-box"), null, false);
 }
 
-/* SET LIST (100% LOCAL STORAGE MANAGEMENT) */
+/* SET LIST */
 
 function renderSetList() {
     const container = document.getElementById("setlist-container");
     if (!container) return;
     container.innerHTML = "";
 
-    // Read setlists strictly from Local Storage
     try {
         setLists = JSON.parse(localStorage.getItem("local_setlists") || "[]");
     } catch (e) { setLists = []; }
@@ -1710,7 +1705,6 @@ function renderSetList() {
         del.className = "btn btn-sm btn-danger";
         del.textContent = "Delete";
         del.onclick = () => {
-            // SAFE DELETION: Deletes local setlist record ONLY (Firebase songs untouched)
             if (confirm(`Delete local line-up "${sl.worshipLeader}"? (Songs in Firebase will NOT be deleted)`)) {
                 setLists.splice(displayIndex, 1);
                 localStorage.setItem("local_setlists", JSON.stringify(setLists));
@@ -1746,8 +1740,6 @@ function openShowSetListDrawer(sl) {
     openDrawer("drawer-show-setlist");
 }
 
-/* CONFIRM LOAD SET LIST (AUTO IMPORTS SONGS FROM MASTER DATABASE TO LOCAL) */
-
 function confirmLoadSetList() {
     if (pendingSetListIndex === null) return;
     const sl = setLists[pendingSetListIndex];
@@ -1761,7 +1753,6 @@ function confirmLoadSetList() {
 
     activeLineUp = { ...sl.lineup };
 
-    // AUTO-IMPORT: Cache all songs assigned to this lineup into local storage
     try {
         const cachedSongs = JSON.parse(localStorage.getItem("offline_cached_songs") || "{}");
         for (const [cat, songTitle] of Object.entries(activeLineUp)) {
@@ -1770,7 +1761,6 @@ function confirmLoadSetList() {
             }
         }
         localStorage.setItem("offline_cached_songs", JSON.stringify(cachedSongs));
-        console.info("Lineup songs auto-imported to local cache.");
     } catch (e) {}
 
     closeModal("confirm-lineup-modal");
@@ -1853,7 +1843,7 @@ function playLineUpSongAt(index) {
     document.getElementById("play-song-title").textContent = category + " — " + title;
 }
 
-/* SONG DATABASE (PULLED FROM FIREBASE CLOUD) */
+/* SONG DATABASE */
 
 function renderSongsDatabase() {
     const container = document.getElementById("songs-db-container");
@@ -1934,7 +1924,7 @@ function openFullEditor() {
 
 function openPlayToEdit() { openFullEditor(); }
 
-/* SAVE SONG (SAVED DIRECTLY TO FIREBASE MASTER DATABASE) */
+/* SAVE SONG TO FIREBASE */
 
 async function saveSongFromEditor() {
     const editor = document.getElementById("editor-textarea");
@@ -1944,7 +1934,6 @@ async function saveSongFromEditor() {
     if (!title) return alert("Missing song title.");
     if (!content) return alert("Please enter song lyrics and chords.");
 
-    // Require passkey only when updating existing songs in Firebase
     if (!isNewSongDraft) {
         if (!checkAdminPasskey("Save Master Song Edits to Firebase")) return;
     }
@@ -1970,8 +1959,6 @@ async function saveSongFromEditor() {
     }
 }
 
-/* DELETE MASTER SONG FROM FIREBASE (REQUIRES PASSKEY) */
-
 async function deleteCurrentSong() {
     const title = currentPlayingSong.title;
     if (!title) return;
@@ -1996,7 +1983,7 @@ async function deleteCurrentSong() {
     }
 }
 
-/* NEW LINE-UP FORM (SAVED ONLY TO LOCAL STORAGE) */
+/* NEW LINE-UP FORM */
 
 function renderNewLineUpForm() {
     const container = document.getElementById("new-lineup-selectors");
@@ -2060,7 +2047,6 @@ function saveNewLineUpFromForm() {
         createdAt: Date.now()
     };
 
-    // 🔒 SAVE LINE-UP TO LOCAL STORAGE ONLY
     try {
         let localSetLists = JSON.parse(localStorage.getItem("local_setlists") || "[]");
         localSetLists.push(newList);
@@ -2082,7 +2068,6 @@ function saveNewLineUpFromForm() {
 function playSong(title, shouldBroadcast = true) {
     let songContent = songsDatabase[title];
 
-    // Fallback to local cache if offline
     if (!songContent) {
         try {
             const cachedSongs = JSON.parse(localStorage.getItem("offline_cached_songs") || "{}");
@@ -2170,7 +2155,6 @@ async function confirmAddCategory() {
 /* INITIALIZE */
 
 document.addEventListener("DOMContentLoaded", () => {
-    // Read local cache fallback first
     try {
         const localSongs = JSON.parse(localStorage.getItem("offline_cached_songs") || "{}");
         if (Object.keys(localSongs).length > 0) songsDatabase = localSongs;

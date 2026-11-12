@@ -1173,18 +1173,23 @@ function switchView(viewName, pushHistory = true) {
 function goBack(fromSystemBack = false) {
     closeLineColorTool();
 
-    const categoryModal = document.getElementById("category-picker-modal");
-    if (categoryModal && categoryModal.style.display === "flex") {
-        categoryModal.style.display = "none";
+    // 1. Isara muna ang anumang bukas na modal o drawer kung meron man
+    const openOverlays = Array.from(document.querySelectorAll(".drawer-overlay")).filter(
+        el => el.style.display === "flex"
+    );
+    if (openOverlays.length > 0) {
+        openOverlays.forEach(el => el.style.display = "none");
         return;
     }
 
+    // 2. Kung may naka-stack na views, bumalik sa nakaraan
     if (viewHistory.length > 1) {
         viewHistory.pop();
         switchView(viewHistory[viewHistory.length - 1], false);
         return;
     }
 
+    // 3. Kung nasa Home na, mag-prompt bago lumabas
     const confirmed = window.confirm("Are you sure you want to leave BFBC LINE-UP?");
     if (!confirmed) return;
 

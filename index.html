@@ -381,7 +381,6 @@ header {
     text-align: left;
     white-space: pre-wrap;
     overflow-wrap: break-word;
-    /* Pinipigilan ang auto-scaling ng mobile browser sa fonts para laging pantay ang laki */
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
 }
@@ -883,7 +882,7 @@ header {
     </div>
 </div>
 
-<div id="category-picker-modal" class="drawer-overlay">
+<div id="category-picker-modal" class="drawer-overlay" onclick="closeModal('category-picker-modal')">
     <div class="drawer-panel" onclick="event.stopPropagation()">
         <h3 style="color:var(--section);font-size:0.95rem;">Select Song Category</h3>
         <p style="color:var(--text-muted);font-size:0.75rem;">Choose a category to begin playback.</p>
@@ -942,7 +941,9 @@ const MAX_SONG_FONT_SIZE = 40;
 let globalSemitones = 0;
 let activeEditingKey = null;
 let currentPlayingSong = { title: "", content: "", fontSize: 16 };
-let viewHistory = ["home"];
+
+/* UNIFIED NAVIGATION STACK (Tracks both views & overlays in order) */
+let navStack = [{ type: "view", id: "home" }];
 let pendingSetListIndex = null;
 
 let allowBrowserExit = false;
@@ -1146,50 +1147,72 @@ function changeEditorZoom(amount) {
     applySongFontSize(currentSongFontSize + amount, true);
 }
 
-function switchView(viewName, pushHistory = true) {
-    const normalizedName = viewName.startsWith("view-")
-        ? viewName.substring(5)
-        : viewName;
+/* 🎯 UNIFIED NAVIGATION ENGINE (Play -> Categories -> Setlist -> Home) */
 
-    document.querySelectorAll(".view-section").forEach(el =>
-        el.classList.remove("active")
-    );
+function renderNavState(state) {
+    // Itago muna lahat ng modals/drawers
+    document.querySelectorAll(".drawer-overlay").forEach(el => el.style.display = "none");
 
-    const target = document.getElementById("view-" + normalizedName);
-    if (target) {
-        target.classList.add("active");
-    } else {
-        return;
+    if (state.type === "view") {
+        document.querySelectorAll(".view-section").forEach(el => el.classList.remove("active"));
+        const target = document.getElementById("view-" + state.id);
+        if (target) target.classList.add("active");
+    } else if (state.type === "overlay") {
+        // Siguraduhing active pa rin ang nasa ilalim na view
+        const underlyingView = [...navStack].reverse().find(item => item.type === "view") || { type: "view", id: "home" };
+        document.querySelectorAll(".view-section").forEach(el => el.classList.remove("active"));
+        const viewEl = document.getElementById("view-" + underlyingView.id);
+        if (viewEl) viewEl.classList.add("active");
+
+        const overlay = document.getElementById(state.id);
+        if (overlay) overlay.style.display = "flex";
     }
+}
 
+function pushNavState(type, id) {
+    const normalizedId = (type === "view" && id.startsWith("view-")) ? id.substring(5) : id;
+    const top = navStack[navStack.length - 1];
+
+    if (!top || top.type !== type || top.id !== normalizedId) {
+        navStack.push({ type, id: normalizedId });
+    }
+    renderNavState({ type, id: normalizedId });
+}
+
+function switchView(viewName, pushHistory = true) {
+    const normalizedName = viewName.startsWith("view-") ? viewName.substring(5) : viewName;
     if (pushHistory) {
-        const currentTop = viewHistory[viewHistory.length - 1];
-        if (currentTop !== normalizedName) {
-            viewHistory.push(normalizedName);
-        }
+        pushNavState("view", normalizedName);
+    } else {
+        renderNavState({ type: "view", id: normalizedName });
+    }
+}
+
+function openOverlayTracked(overlayId) {
+    pushNavState("overlay", overlayId);
+}
+
+function closeOverlayTracked(overlayId) {
+    const top = navStack[navStack.length - 1];
+    if (top && top.type === "overlay" && top.id === overlayId && navStack.length > 1) {
+        navStack.pop();
+        renderNavState(navStack[navStack.length - 1]);
+    } else {
+        const el = document.getElementById(overlayId);
+        if (el) el.style.display = "none";
     }
 }
 
 function goBack(fromSystemBack = false) {
     closeLineColorTool();
 
-    // 1. Isara muna ang anumang bukas na modal o drawer kung meron man
-    const openOverlays = Array.from(document.querySelectorAll(".drawer-overlay")).filter(
-        el => el.style.display === "flex"
-    );
-    if (openOverlays.length > 0) {
-        openOverlays.forEach(el => el.style.display = "none");
+    if (navStack.length > 1) {
+        navStack.pop();
+        const prev = navStack[navStack.length - 1];
+        renderNavState(prev);
         return;
     }
 
-    // 2. Kung may naka-stack na views, bumalik sa nakaraan
-    if (viewHistory.length > 1) {
-        viewHistory.pop();
-        switchView(viewHistory[viewHistory.length - 1], false);
-        return;
-    }
-
-    // 3. Kung nasa Home na, mag-prompt bago lumabas
     const confirmed = window.confirm("Are you sure you want to leave BFBC LINE-UP?");
     if (!confirmed) return;
 
@@ -1220,25 +1243,21 @@ function installBrowserBackGuard() {
 }
 
 function openDrawer(drawerId) {
-    document.querySelectorAll(".drawer-overlay").forEach(el => el.style.display = "none");
-    const drawer = document.getElementById(drawerId);
-    if (drawer) drawer.style.display = "flex";
+    if (drawerId === "drawer-setlist") renderSetList();
+    openOverlayTracked(drawerId);
 }
 
 function closeDrawer(drawerId) {
-    const drawer = document.getElementById(drawerId);
-    if (drawer) drawer.style.display = "none";
+    closeOverlayTracked(drawerId);
 }
 
 function closeModal(modalId) {
-    const modal = document.getElementById(modalId);
-    if (modal) modal.style.display = "none";
+    closeOverlayTracked(modalId);
 }
 
 function openAddSongModal() {
     document.getElementById("new-song-title-input").value = "";
-    document.querySelectorAll(".drawer-overlay").forEach(el => el.style.display = "none");
-    document.getElementById("add-song-title-modal").style.display = "flex";
+    openOverlayTracked("add-song-title-modal");
 
     setTimeout(() => {
         document.getElementById("new-song-title-input").focus();
@@ -1282,7 +1301,11 @@ function confirmAddSongTitle() {
 
     document.getElementById("song-editor-heading").textContent = "Add Song Lyrics";
     closeLineColorTool();
-    closeAddSongTitleModal();
+
+    // Palitan ang modal sa stack ng song editor view
+    if (navStack[navStack.length - 1]?.id === "add-song-title-modal") {
+        navStack.pop();
+    }
     switchView("view-song-editor");
 
     document.getElementById("editor-textarea").focus();
@@ -1674,8 +1697,7 @@ function renderSetList() {
         load.onclick = () => {
             pendingSetListIndex = displayIndex;
             document.getElementById("confirm-lineup-details").textContent = "Worship Leader: " + (sl.worshipLeader || "Unnamed");
-            closeDrawer("drawer-setlist");
-            document.getElementById("confirm-lineup-modal").style.display = "flex";
+            openOverlayTracked("confirm-lineup-modal");
         };
 
         const showBtn = document.createElement("button");
@@ -1705,7 +1727,6 @@ function renderSetList() {
 }
 
 function openShowSetListDrawer(sl) {
-    closeDrawer("drawer-setlist");
     document.getElementById("show-setlist-title").textContent = "Set List: " + (sl.worshipLeader || "Unnamed");
 
     const contentBox = document.getElementById("show-setlist-content");
@@ -1722,7 +1743,7 @@ function openShowSetListDrawer(sl) {
         contentBox.innerHTML = '<span class="empty-message">No songs in this line-up.</span>';
     }
 
-    openDrawer("drawer-show-setlist");
+    openOverlayTracked("drawer-show-setlist");
 }
 
 function confirmLoadSetList() {
@@ -1748,10 +1769,14 @@ function confirmLoadSetList() {
         localStorage.setItem("offline_cached_songs", JSON.stringify(cachedSongs));
     } catch (e) {}
 
-    closeModal("confirm-lineup-modal");
+    // Alisin ang confirm modal sa stack para pag nag-Back mula sa Categories ay diretso sa Set List
+    if (navStack[navStack.length - 1]?.id === "confirm-lineup-modal") {
+        navStack.pop();
+    }
     pendingSetListIndex = null;
 
     if (!Object.keys(activeLineUp).length) {
+        renderNavState(navStack[navStack.length - 1]);
         return alert("This set list has no assigned songs.");
     }
 
@@ -1761,7 +1786,6 @@ function confirmLoadSetList() {
 function backToSetList() {
     closeModal("confirm-lineup-modal");
     pendingSetListIndex = null;
-    openDrawer("drawer-setlist");
 }
 
 let playLineUpEntries = [];
@@ -1773,7 +1797,7 @@ function playLineUp() {
     if (!playLineUpEntries.length) return;
 
     renderCategoryPicker();
-    document.getElementById("category-picker-modal").style.display = "flex";
+    openOverlayTracked("category-picker-modal");
 }
 
 function renderCategoryPicker() {
@@ -1808,7 +1832,7 @@ function renderCategoryPicker() {
             button.onclick = () => {
                 const selectedIndex = playLineUpEntries.findIndex(entry => entry[0] === category);
                 if (selectedIndex < 0) return;
-                closeModal("category-picker-modal");
+                // Huwag i-pop ang category-picker-modal sa navStack; ipatong ang Play view sa ibabaw nito!
                 playLineUpSongAt(selectedIndex);
             };
         }
@@ -1851,7 +1875,6 @@ function renderSongsDatabase() {
         name.textContent = "🎵 " + title;
         name.onclick = () => {
             playSong(title, true);
-            closeDrawer("drawer-songs");
         };
 
         const edit = document.createElement("button");
@@ -1859,7 +1882,6 @@ function renderSongsDatabase() {
         edit.textContent = "View";
         edit.onclick = () => {
             openEditSongDirect(title);
-            closeDrawer("drawer-songs");
         };
 
         row.append(name, edit);
@@ -1939,6 +1961,10 @@ async function saveSongFromEditor() {
         } catch(e) {}
 
         alert("Song saved to Firebase Cloud Master Database!");
+        // Alisin ang editor sa stack para pag nag-Back mula sa Play ay bumalik sa pinanggalingan
+        if (navStack[navStack.length - 1]?.id === "song-editor") {
+            navStack.pop();
+        }
         playSong(title, true);
     } catch (err) {
         console.error(err);
@@ -1961,7 +1987,7 @@ async function deleteCurrentSong() {
         await remove(ref(db, 'lineUpMaker/songsDatabase/' + title));
         delete songsDatabase[title];
         alert("Song deleted from Firebase Master Database.");
-        switchView("home");
+        goBack();
         renderSongsDatabase();
         renderNewLineUpForm();
     } catch (err) {
@@ -2044,7 +2070,9 @@ function saveNewLineUpFromForm() {
 
     alert("Line-up saved to Device Storage!");
     wlInput.value = "";
-    closeDrawer("drawer-newlineup");
+    if (navStack[navStack.length - 1]?.id === "drawer-newlineup") {
+        navStack.pop();
+    }
     openDrawer("drawer-setlist");
 }
 
@@ -2102,11 +2130,11 @@ function openQRModal() {
     if (typeof QRCode !== "undefined") {
         new QRCode(qr, { text: viewerUrl, width: 150, height: 150 });
     }
-    document.getElementById("qr-modal").style.display = "flex";
+    openOverlayTracked("qr-modal");
 }
 
 function openAddCategoryModal() {
-    document.getElementById("add-cat-modal").style.display = "flex";
+    openOverlayTracked("add-cat-modal");
 }
 
 async function confirmAddCategory() {
@@ -2153,6 +2181,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const brandTitle = document.querySelector(".brand-title");
         if (brandTitle) brandTitle.textContent = "BFBC LINE-UP (Viewer)";
 
+        navStack = [{ type: "view", id: "play" }];
         switchView("play", false);
     }
 

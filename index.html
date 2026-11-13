@@ -953,6 +953,9 @@ let setLists = [];
 let draftNewLineUp = {};
 let selectingCategoryName = null;
 
+/* PENDING SHARED LINE-UP IMPORT (Waits for songsDatabase if needed) */
+let pendingImportedLineUp = null;
+
 /* ZOOM & CLOUD SYNC */
 
 let songZoomLevels = {};
@@ -1065,6 +1068,13 @@ function initializeCloudSync() {
 
         renderSongsDatabase();
         renderNewLineUpForm();
+
+        // Kung galing sa shared link at kaka-load pa lang ng Firebase songs, i-launch na agad ang Play mode!
+        if (pendingImportedLineUp) {
+            const toLaunch = pendingImportedLineUp;
+            pendingImportedLineUp = null;
+            activateAndPlaySharedLineUp(toLaunch);
+        }
     });
 
     onValue(ref(db, 'lineUpMaker/categories'), (snapshot) => {
@@ -1730,6 +1740,14 @@ function renderSetList() {
         showBtn.textContent = "Show";
         showBtn.onclick = () => openShowSetListDrawer(sl);
 
+        const shareBtn = document.createElement("button");
+        shareBtn.className = "btn btn-sm";
+        shareBtn.style.background = "#facc15";
+        shareBtn.style.color = "#0f172a";
+        shareBtn.style.fontWeight = "bold";
+        shareBtn.textContent = "Share";
+        shareBtn.onclick = () => shareLineUpLink(sl);
+
         const del = document.createElement("button");
         del.className = "btn btn-sm btn-danger";
         del.textContent = "Delete";
@@ -1742,10 +1760,111 @@ function renderSetList() {
             }
         };
 
-        buttons.append(load, showBtn, del);
+        buttons.append(load, showBtn, shareBtn, del);
         row.append(heading, buttons);
         container.appendChild(row);
     });
+}
+
+/* 🎯 DIRECT SHARE LINK GENERATOR & AUTO-PLAY IMPORTER */
+
+function shareLineUpLink(sl) {
+    const payload = {
+        wl: sl.worshipLeader || "Shared Line-up",
+        lu: sl.lineup || {}
+    };
+
+    const jsonStr = JSON.stringify(payload);
+    const encoded = btoa(unescape(encodeURIComponent(jsonStr)));
+    const baseUrl = window.location.origin + window.location.pathname;
+    const shareUrl = baseUrl + "?lineup=" + encodeURIComponent(encoded);
+
+    if (navigator.share) {
+        navigator.share({
+            title: "BFBC Line-up: " + payload.wl,
+            text: "BFBC Worship Line-up (" + payload.wl + "):",
+            url: shareUrl
+        }).catch(() => {});
+    } else if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(shareUrl)
+            .then(() => alert(`Share link copied for "${payload.wl}"!\nPaste and send it to other phones.`))
+            .catch(() => prompt("Copy this link to share:", shareUrl));
+    } else {
+        prompt("Copy this link to share:", shareUrl);
+    }
+}
+
+function handleIncomingSharedLineUp() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const rawParam = urlParams.get("lineup");
+    if (!rawParam) return;
+
+    try {
+        const jsonStr = decodeURIComponent(escape(atob(decodeURIComponent(rawParam))));
+        const parsed = JSON.parse(jsonStr);
+
+        if (!parsed || !parsed.lu || typeof parsed.lu !== "object") return;
+
+        const wlName = parsed.wl || "Shared Line-up";
+        const newEntry = {
+            worshipLeader: wlName,
+            lineup: parsed.lu,
+            createdAt: Date.now()
+        };
+
+        // 1. I-save sa localStorage ng receiving phone (iwas duplicate kung na-save na)
+        let localSetLists = [];
+        try {
+            localSetLists = JSON.parse(localStorage.getItem("local_setlists") || "[]");
+        } catch (e) { localSetLists = []; }
+
+        const signature = JSON.stringify({ wl: wlName, lu: parsed.lu });
+        const alreadyExists = localSetLists.some(
+            item => JSON.stringify({ wl: item.worshipLeader, lu: item.lineup }) === signature
+        );
+
+        if (!alreadyExists) {
+            localSetLists.push(newEntry);
+            localStorage.setItem("local_setlists", JSON.stringify(localSetLists));
+        }
+
+        setLists = localSetLists;
+        renderSetList();
+
+        // 2. Linisin ang URL para hindi paulit-ulit mag-import kapag ni-refresh
+        const cleanUrl = window.location.origin + window.location.pathname;
+        window.history.replaceState({ lineUpMakerBackGuard: true }, document.title, cleanUrl);
+
+        // 3. Kung may songs na sa cache/Firebase, buksan agad sa Play Mode; kung wala pa, hintayin ang Firebase sync
+        if (Object.keys(songsDatabase).length > 0) {
+            activateAndPlaySharedLineUp(newEntry);
+        } else {
+            pendingImportedLineUp = newEntry;
+        }
+    } catch (err) {
+        console.error("Failed to parse shared line-up link:", err);
+    }
+}
+
+function activateAndPlaySharedLineUp(entry) {
+    activeLineUp = { ...entry.lineup };
+
+    // I-order ang mga kanta base sa category order
+    const orderedEntries = [];
+    categories.forEach(cat => {
+        if (activeLineUp[cat]) orderedEntries.push([cat, activeLineUp[cat]]);
+    });
+    Object.entries(activeLineUp).forEach(([cat, title]) => {
+        if (!categories.includes(cat) && title) orderedEntries.push([cat, title]);
+    });
+
+    playLineUpEntries = orderedEntries;
+    currentLineUpIndex = 0;
+
+    if (!playLineUpEntries.length) return;
+
+    renderCategoryPicker();
+    playLineUpSongAt(0);
 }
 
 function openShowSetListDrawer(sl) {
@@ -2093,7 +2212,6 @@ function renderSelectSongModalList() {
     listContainer.innerHTML = "";
     const query = (searchInput ? searchInput.value : "").toLowerCase().trim();
 
-    // Option para alisin/i-clear ang nakalagay na kanta sa category
     if (selectingCategoryName && draftNewLineUp[selectingCategoryName] && !query) {
         const clearBtn = document.createElement("button");
         clearBtn.type = "button";
@@ -2306,6 +2424,9 @@ document.addEventListener("DOMContentLoaded", () => {
     applySongFontSize(DEFAULT_SONG_FONT_SIZE, false);
     initializeColorEditor();
     installBrowserBackGuard();
+
+    // I-check kung galing sa shared line-up link
+    handleIncomingSharedLineUp();
 
     if (localLiveChannel) {
         localLiveChannel.onmessage = (event) => handleIncomingLiveSync(event.data);
